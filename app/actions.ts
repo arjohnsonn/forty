@@ -53,7 +53,8 @@ export const signInAction = async (formData: FormData) => {
     return encodedRedirect("error", "/sign-in", error.message);
   }
 
-  return redirect("/protected");
+  // Redirect to home page where the chat is
+  return redirect("/");
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
