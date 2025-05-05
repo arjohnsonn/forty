@@ -1,4 +1,4 @@
-import { signUpAction } from "@/app/actions";
+import { signUpAction, signInWithGoogleAction } from "@/app/actions";
 import { FormMessage, Message } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,19 @@ export default async function Signup(props: {
           />
           <SubmitButton formAction={signUpAction} pendingText="Signing up...">
             Sign up
+          </SubmitButton>
+          <div className="flex items-center gap-2 my-4">
+            <span className="h-px flex-1 bg-gray-200" />
+            <span className="text-sm text-gray-500">OR</span>
+            <span className="h-px flex-1 bg-gray-200" />
+          </div>
+          <SubmitButton
+            formAction={signInWithGoogleAction}
+            variant="outline"
+            formNoValidate
+            pendingText="Continuing..."
+          >
+            Continue with Google
           </SubmitButton>
           <FormMessage message={searchParams} />
         </div>
