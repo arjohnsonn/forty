@@ -4,8 +4,7 @@ import React from "react";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar } from "@/components/ui/avatar";
-import { SendIcon, UserIcon, BotIcon, Loader2, Check, X } from "lucide-react";
+import { SendIcon, Loader2, Check, X } from "lucide-react";
 
 type Message = {
   id: string;
@@ -16,19 +15,24 @@ type Message = {
 type ConversationProps = {
   title: string;
   messages: Message[];
+  loading?: boolean;
 };
 
 const Conversation: React.FC<ConversationProps> = ({
   title,
   messages: initialMessages,
+  loading = false,
 }) => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  useEffect(() => {
+    setMessages(initialMessages);
+  }, [initialMessages]);
+
   const [rmpEnabled, setRmpEnabled] = useState(true);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom of messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -71,7 +75,6 @@ const Conversation: React.FC<ConversationProps> = ({
         throw new Error(data.error || "Failed to get response");
       }
 
-      // Add assistant message to chat
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -143,7 +146,7 @@ const Conversation: React.FC<ConversationProps> = ({
             ))
           )}
 
-          {isLoading && (
+          {(isLoading || loading) && (
             <div className="flex justify-start">
               <div className="flex items-start gap-2 max-w-[80%]">
                 <div className="rounded-lg px-3 py-2 bg-muted flex items-center">
@@ -173,7 +176,7 @@ const Conversation: React.FC<ConversationProps> = ({
                   }
                 }}
                 placeholder="Type your message..."
-                disabled={isLoading}
+                disabled={isLoading || loading}
                 className="w-full pr-12 py-3 pb-20 min-h-[40px] max-h-[200px] resize-none"
                 style={{ height: "auto" }}
               />
