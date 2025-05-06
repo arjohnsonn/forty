@@ -52,6 +52,10 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        texas: {
+          DEFAULT: "rgb(191 87 0)",
+          500: "rgb(191 87 0)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
