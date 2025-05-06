@@ -94,107 +94,116 @@ const Conversation: React.FC<ConversationProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen container">
-      <div className="p-4 bg-background">
-        <h1 className="text-xl font-bold">{title}</h1>
+    <div className="flex flex-col h-screen">
+      <div className="bg-background">
+        <div className="max-w-screen-lg mx-auto px-4 py-4">
+          <h1 className="text-xl font-bold">{title}</h1>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center text-muted-foreground">
-            <div>
-              <p>No messages yet</p>
-              <p className="text-sm">
-                Start a conversation by typing a message below
-              </p>
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ scrollbarGutter: "stable both-edges" }}
+      >
+        <div className="max-w-screen-lg mx-auto px-4 py-4 flex flex-col h-full space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-center text-muted-foreground">
+              <div>
+                <p>No messages yet</p>
+                <p className="text-sm">
+                  Start a conversation by typing a message below
+                </p>
+              </div>
             </div>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+          ) : (
+            messages.map((message) => (
               <div
-                className={`flex items-start gap-2 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
+                key={message.id}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`rounded-lg px-3 py-2 ${
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  }`}
+                  className={`flex items-start gap-2 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
                 >
-                  {message.content.split("\n").map((text, i) => (
-                    <React.Fragment key={i}>
-                      {text}
-                      {i !== message.content.split("\n").length - 1 && <br />}
-                    </React.Fragment>
-                  ))}
+                  <div
+                    className={`rounded-lg px-3 py-2 ${
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted"
+                    }`}
+                  >
+                    {message.content.split("\n").map((text, i) => (
+                      <React.Fragment key={i}>
+                        {text}
+                        {i !== message.content.split("\n").length - 1 && <br />}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="flex items-start gap-2 max-w-[80%]">
+                <div className="rounded-lg px-3 py-2 bg-muted flex items-center">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Thinking...
                 </div>
               </div>
             </div>
-          ))
-        )}
+          )}
 
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="flex items-start gap-2 max-w-[80%]">
-              <div className="rounded-lg px-3 py-2 bg-muted flex items-center">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Thinking...
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      <div className="p-4 bg-background">
-        <form onSubmit={handleSubmit} className="w-full">
-          <div className="relative w-full">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (input.trim())
-                    handleSubmit(e as unknown as React.FormEvent);
-                }
-              }}
-              placeholder="Type your message..."
-              disabled={isLoading}
-              className="w-full pr-12 py-3 pb-20 min-h-[40px] max-h-[200px] resize-none"
-              style={{ height: "auto" }}
-            />
-            <Button
-              variant="outline"
-              onClick={() => setRmpEnabled(!rmpEnabled)}
-              className="absolute left-2 bottom-2 rounded-xl h-10 flex items-center gap-1 px-2"
-            >
-              {rmpEnabled ? (
-                <Check className="w-4 h-4 text-green-500" />
-              ) : (
-                <X className="w-4 h-4 text-red-500" />
-              )}
-              <span className="text-sm">RMP</span>
-            </Button>
-            <Button
-              type="submit"
-              size="icon"
-              disabled={isLoading || !input.trim()}
-              className="absolute right-2 bottom-2 h-10 w-10"
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <SendIcon className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </form>
+      <div className="bg-background">
+        <div className="max-w-screen-lg mx-auto px-4 py-4">
+          <form onSubmit={handleSubmit} className="w-full">
+            <div className="relative w-full">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim())
+                      handleSubmit(e as unknown as React.FormEvent);
+                  }
+                }}
+                placeholder="Type your message..."
+                disabled={isLoading}
+                className="w-full pr-12 py-3 pb-20 min-h-[40px] max-h-[200px] resize-none"
+                style={{ height: "auto" }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => setRmpEnabled(!rmpEnabled)}
+                className="absolute left-2 bottom-2 rounded-xl h-10 flex items-center gap-1 px-2"
+              >
+                {rmpEnabled ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <X className="w-4 h-4 text-red-500" />
+                )}
+                <span className="text-sm">RMP</span>
+              </Button>
+              <Button
+                type="submit"
+                size="icon"
+                disabled={isLoading || !input.trim()}
+                className="absolute right-2 bottom-2 h-10 w-10"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendIcon className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
