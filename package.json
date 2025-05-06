@@ -38,7 +38,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "sharp",
-      "supabase"
+      "supabase",
+      "unrs-resolver"
     ]
   }
 }
