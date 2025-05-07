@@ -50,7 +50,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
   }, [input]);
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col w-[85%] h-full">
       <div className="bg-background">
         <div className="max-w-screen-lg mx-auto px-4 py-4">
           <h1 className="text-xl font-bold">{title}</h1>
