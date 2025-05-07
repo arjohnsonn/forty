@@ -114,7 +114,7 @@ export function Sidebar() {
       {!isMobile && (
         <button
           onClick={() => setCollapsed(!collapsed)}
-          style={{ left: collapsed ? 8 : "var(--sidebar-width)" }}
+          style={{ left: collapsed ? 8 : "calc(var(--sidebar-width) + 6px)" }}
           className={cn(
             "fixed top-5 z-[100] flex h-8 w-8 items-center justify-center rounded-r-md text-white transition-all duration-300 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
           )}
@@ -130,7 +130,7 @@ export function Sidebar() {
       {isMobile && (
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="fixed left-4 top-4 z-50 rounded-md p-2 text-white transition-colors duration-150 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
+          className="fixed left-4 top-4 z-[100] rounded-md p-2 text-white transition-colors duration-150 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -138,13 +138,14 @@ export function Sidebar() {
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-background text-foreground transition-all duration-300",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-background text-foreground transition-all duration-30 ",
           collapsed ? "w-0 overflow-hidden" : "w-60",
+          !collapsed && "border-r border-foreground/10",
           isMobile && !mobileOpen && "transform -translate-x-full",
           isMobile && mobileOpen && "transform translate-x-0 shadow-lg"
         )}
       >
-        <div className="flex items-center pb-[1.43rem] border-b border-b-foreground/10 p-4 overflow-hidden">
+        <div className="flex items-center justify-center pt-[1.43rem] border-b border-b-foreground/10 p-4">
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
           <h1 className="ml-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
             UT Registration GPT
