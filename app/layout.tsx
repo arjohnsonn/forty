@@ -29,14 +29,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <main className="flex flex-col items-center">
-            <div className="w-full flex flex-col items-center">
+          <main className="flex flex-col min-h-screen">
+            <div className="w-full flex flex-col">
               <nav className="w-full absolute flex justify-center border-b border-b-foreground/10 h-16">
                 <div className="w-full flex justify-end items-center p-3 px-5 text-sm">
                   <HeaderAuth />
                 </div>
               </nav>
-              <div className="flex flex-col">{children}</div>
+              <div className="flex flex-col flex-1">{children}</div>
             </div>
           </main>
         </ThemeProvider>
