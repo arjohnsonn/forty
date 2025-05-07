@@ -131,7 +131,7 @@ export const resetPasswordAction = async (formData: FormData) => {
 export const signOutAction = async () => {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return redirect("/");
+  return redirect("/sign-in");
 };
 
 // Add Google OAuth action
