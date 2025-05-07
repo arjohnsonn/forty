@@ -145,7 +145,7 @@ export function Sidebar() {
           isMobile && mobileOpen && "transform translate-x-0 shadow-lg"
         )}
       >
-        <div className="flex items-center justify-center pt-[1.43rem] border-b border-b-foreground/10 p-4">
+        <div className="flex items-center justify-center pt-5 border-b border-b-foreground/10 p-4">
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
           <h1 className="ml-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
             UT Registration GPT
