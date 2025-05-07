@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SendIcon, Loader2, Check, X } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
 
 type Message = {
   id: string;
@@ -14,24 +15,27 @@ type Message = {
 
 type ConversationProps = {
   title: string;
-  messages: Message[];
-  loading?: boolean;
+  initialQuery: string;
 };
 
-const Conversation: React.FC<ConversationProps> = ({
-  title,
-  messages: initialMessages,
-  loading = false,
-}) => {
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
-  useEffect(() => {
-    setMessages(initialMessages);
-  }, [initialMessages]);
+const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
+  const { messages, input, handleInputChange, handleSubmit, status, append } =
+    useChat();
 
   const [rmpEnabled, setRmpEnabled] = useState(true);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // have state to prevent double rerender
+    if (initialQuery) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: initialQuery,
+      };
+      append(userMessage);
+    }
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -44,57 +48,6 @@ const Conversation: React.FC<ConversationProps> = ({
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
   }, [input]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!input.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const response = await fetch("/api/gpt", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ prompt: input }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to get response");
-      }
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.message,
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error("Error:", error);
-      // Add error message
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, something went wrong. Please try again.",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <div className="flex flex-col h-screen">
@@ -134,19 +87,26 @@ const Conversation: React.FC<ConversationProps> = ({
                         : "bg-muted"
                     }`}
                   >
-                    {message.content.split("\n").map((text, i) => (
-                      <React.Fragment key={i}>
-                        {text}
-                        {i !== message.content.split("\n").length - 1 && <br />}
-                      </React.Fragment>
-                    ))}
+                    {message.parts.map((part, i) => {
+                      switch (part.type) {
+                        case "text":
+                          return (
+                            <div key={`${message.id}-${i}`}>
+                              {part.text}
+                              {/* {i !== message.content.split("\n").length - 1 && (
+                                <br />
+                              )} */}
+                            </div>
+                          );
+                      }
+                    })}
                   </div>
                 </div>
               </div>
             ))
           )}
 
-          {(isLoading || loading) && (
+          {status == "submitted" && (
             <div className="flex justify-start">
               <div className="flex items-start gap-2 max-w-[80%]">
                 <div className="rounded-lg px-3 py-2 bg-muted flex items-center">
@@ -167,7 +127,7 @@ const Conversation: React.FC<ConversationProps> = ({
             <div className="relative w-full">
               <Textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -176,7 +136,7 @@ const Conversation: React.FC<ConversationProps> = ({
                   }
                 }}
                 placeholder="Type your message..."
-                disabled={isLoading || loading}
+                disabled={status != "ready"}
                 className="w-full pr-12 py-3 pb-20 min-h-[40px] max-h-[200px] resize-none"
                 style={{ height: "auto" }}
               />
@@ -195,10 +155,10 @@ const Conversation: React.FC<ConversationProps> = ({
               <Button
                 type="submit"
                 size="icon"
-                disabled={isLoading || !input.trim()}
+                disabled={status != "ready" || !input.trim()}
                 className="absolute right-2 bottom-2 h-10 w-10"
               >
-                {isLoading ? (
+                {status != "ready" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <SendIcon className="h-4 w-4" />
