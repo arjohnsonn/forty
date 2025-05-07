@@ -50,8 +50,8 @@ const SidebarItem = ({
       className={cn(
         "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
         active
-          ? "bg-zinc-800 text-white"
-          : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          ? "bg-zinc-900 text-white"
+          : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
       )}
       title={text}
       target={target}
@@ -71,7 +71,7 @@ const Section = ({ title, children }: SectionProps) => {
   return (
     <div className="mb-4">
       {title && (
-        <h3 className="mb-1 px-3 text-xs font-medium uppercase text-zinc-500">
+        <h3 className="mb-1 px-3 text-xs font-medium uppercase text-zinc-900">
           {title}
         </h3>
       )}
@@ -112,7 +112,7 @@ export function Sidebar() {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            "fixed left-0 top-20 z-50 flex h-8 w-8 items-center justify-center rounded-r-md bg-zinc-800 text-white transition-all duration-300",
+            "fixed left-0 top-20 z-50 flex h-8 w-8 items-center justify-center rounded-r-md bg-zinc-900 text-white transition-all duration-300",
             collapsed ? "left-0" : "left-60"
           )}
         >
@@ -128,7 +128,7 @@ export function Sidebar() {
       {isMobile && (
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="fixed left-4 top-4 z-50 rounded-md bg-zinc-800 p-2 text-white"
+          className="fixed left-4 top-4 z-50 rounded-md bg-zinc-900 p-2 text-white"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -142,7 +142,7 @@ export function Sidebar() {
           isMobile && mobileOpen && "transform translate-x-0 shadow-lg"
         )}
       >
-        <div className="flex items-center pb-[1.43rem] border-b border-zinc-800 p-4 overflow-hidden">
+        <div className="flex items-center pb-[1.43rem] border-b border-zinc-900 p-4 overflow-hidden">
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
           <h1 className="ml-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
             UT Registration GPT
@@ -206,7 +206,7 @@ export function Sidebar() {
           </Section>
         </div>
 
-        <div className="border-t border-zinc-800 p-2">
+        <div className="border-t border-zinc-900 p-2">
           <SidebarItem
             href="/settings"
             icon={<Settings className="h-4 w-4" />}
