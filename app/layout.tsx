@@ -41,7 +41,7 @@ export default async function RootLayout({
 
           <nav
             style={{ left: "var(--sidebar-width)", right: 0 }}
-            className="fixed top-0 z-50 flex justify-center border-b border-b-foreground/10 h-16 transition-all duration-300 bg-background"
+            className="fixed top-0 z-50 flex justify-center h-16 transition-all duration-300 bg-background"
           >
             <div className="w-full flex justify-end items-center p-3 px-5 text-sm">
               <HeaderAuth />
