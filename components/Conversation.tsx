@@ -1,0 +1,181 @@
+"use client";
+
+import React from "react";
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea, TextareaExpand } from "@/components/ui/textarea";
+import { SendIcon, Loader2, Check, X, ArrowUp } from "lucide-react";
+import { useChat } from "@ai-sdk/react";
+
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
+type ConversationProps = {
+  title: string;
+  initialQuery: string;
+};
+
+const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
+  const { messages, input, handleInputChange, handleSubmit, status, append } =
+    useChat();
+
+  const [rmpEnabled, setRmpEnabled] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // have state to prevent double rerender
+    if (initialQuery) {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: initialQuery,
+      };
+      append(userMessage);
+    }
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    const textarea = document.querySelector("textarea");
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [input]);
+
+  return (
+    <div className="flex flex-col w-[85%] h-full">
+      <div className="bg-background">
+        <div className="max-w-screen-lg mx-auto px-4 py-4">
+          <h1 className="text-xl font-bold">{title}</h1>
+        </div>
+      </div>
+
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{ scrollbarGutter: "stable both-edges" }}
+      >
+        <div className="max-w-screen-lg mx-auto px-4 py-4 flex flex-col h-full space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-center text-muted-foreground">
+              <div>
+                <p>No messages yet</p>
+                <p className="text-sm">
+                  Start a conversation by typing a message below
+                </p>
+              </div>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`flex items-start gap-2 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
+                >
+                  <div
+                    className={`rounded-lg px-3 py-2 ${
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted"
+                    }`}
+                  >
+                    {message.parts.map((part, i) => {
+                      switch (part.type) {
+                        case "text":
+                          return (
+                            <div key={`${message.id}-${i}`}>
+                              {part.text}
+                              {/* {i !== message.content.split("\n").length - 1 && (
+                                <br />
+                              )} */}
+                            </div>
+                          );
+                      }
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+
+          {status == "submitted" && (
+            <div className="flex justify-start">
+              <div className="flex items-start gap-2 max-w-[80%]">
+                <div className="rounded-lg px-3 py-2 bg-muted flex items-center">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Thinking...
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      <div className="bg-background">
+        <div className="max-w-screen-lg mx-auto px-4 py-4">
+          <form onSubmit={handleSubmit} className="w-full">
+            <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-xl border">
+              <TextareaExpand
+                className="rounded-xl w-full mt-2 resize-none overflow-y-auto max-h-60"
+                value={input}
+                onChange={handleInputChange}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (input.trim())
+                      handleSubmit(e as unknown as React.FormEvent);
+                  }
+                }}
+                placeholder="Type your message..."
+                disabled={status === "submitted"}
+              />
+              <div className="flex flex-row justify-start gap-x-2 w-full px-3 pb-3">
+                <div className="flex flex-row gap-x-2 justify-between w-full">
+                  <Button
+                    className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
+                    variant="outline"
+                    type="button"
+                    onClick={() => setRmpEnabled(!rmpEnabled)}
+                  >
+                    {rmpEnabled ? (
+                      <Check className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <X className="w-5 h-5 text-red-500" />
+                    )}
+                    <span>RMP</span>
+                  </Button>
+                </div>
+                <div className="flex flex-row">
+                  <Button
+                    className="rounded-full h-10 w-10 flex items-center justify-center p-0 bg-black dark:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    variant="outline"
+                    type="submit"
+                    disabled={status === "submitted" || !input.trim()}
+                  >
+                    {status === "submitted" ? (
+                      <Loader2 className="w-5 h-5 animate-spin dark:text-black text-white" />
+                    ) : (
+                      <ArrowUp className="w-5 h-5 dark:text-black text-white" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Conversation;

@@ -66,4 +66,24 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Clean, thin scrollbar for browsers that support it */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.2) transparent;
+  }
+  /* WebKit-based browsers */
+  ::-webkit-scrollbar {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.2);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
 }

@@ -18,12 +18,10 @@ const randomGreetings = [
   "Ready to plan your *semester schedule?*",
   "Let’s craft your *perfect semester schedule*",
   "Need help designing your *class lineup?*",
-  "Let’s build your *perfect schedule*",
   "How can I help make your *schedule better?*",
 ];
 
-// add config for sample buttons
-const sampleButtonsConfig = [
+const starterButtonsConfig = [
   {
     label: "Find best professor",
     icon: Star,
@@ -50,22 +48,25 @@ const sampleButtonsConfig = [
   },
 ];
 
-type Props = {};
+type Props = {
+  onSubmit: (greeting: string, query: string) => void;
+};
 
-const NewConvo = (props: Props) => {
+const NewConvo = ({ onSubmit }: Props) => {
   const [rmpEnabled, setRmpEnabled] = useState(true);
-
+  const [greeting, setGreeting] = useState("");
   const [parts, setParts] = useState<string[]>([]);
 
   useEffect(() => {
-    const greeting =
+    const gr =
       randomGreetings[Math.floor(Math.random() * randomGreetings.length)];
-    setParts(greeting.split("*"));
+    setGreeting(gr);
+    setParts(gr.split("*"));
   }, []);
 
   return (
-    <div className="h-screen w-full flex items-center justify-center">
-      <div className="flex flex-col items-center gap-y-3 justify-center h-full">
+    <div className="flex-1 w-full flex items-center justify-center">
+      <div className="flex flex-col items-center gap-y-3 justify-center">
         <h1 className="text-3xl text-center">
           {parts.map((text, idx) =>
             idx % 2 === 1 ? (
@@ -81,18 +82,22 @@ const NewConvo = (props: Props) => {
         <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-xl border">
           <TextareaExpand
             className="rounded-xl w-full mt-2 resize-none overflow-y-auto max-h-60"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                const textarea = e.currentTarget as HTMLTextAreaElement;
+                const query = textarea.value.trim();
+                if (!query) return;
+                onSubmit(greeting, query);
+                textarea.value = "";
+                textarea.dispatchEvent(new Event("input", { bubbles: true }));
+              }
+            }}
             placeholder="Ask anything"
             name="query"
             required
           />
           <div className="flex flex-row justify-start gap-x-2 w-full px-3 pb-3">
-            {/* <Button
-        className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
-        variant="outline"
-      >
-        <Paperclip className="w-5 h-5" />
-        <span>Attach</span>
-      </Button> */}
             <div className="flex flex-row gap-x-2 justify-between w-full">
               <Button
                 className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
@@ -116,7 +121,10 @@ const NewConvo = (props: Props) => {
                     'textarea[name="query"]'
                   ) as HTMLTextAreaElement | null;
                   if (!textarea || !textarea.value.trim()) return;
-                  // TODO: implement send logic here
+                  const query = textarea.value.trim();
+                  onSubmit(greeting, query);
+                  textarea.value = "";
+                  textarea.dispatchEvent(new Event("input", { bubbles: true }));
                 }}
               >
                 <ArrowUp className="w-5 h-5 dark:text-black text-white" />
@@ -125,9 +133,8 @@ const NewConvo = (props: Props) => {
           </div>
         </div>
 
-        {/* sample buttons */}
         <div className="flex flex-wrap items-center justify-center gap-x-2 mx-6">
-          {sampleButtonsConfig.map((btn, idx) => (
+          {starterButtonsConfig.map((btn, idx) => (
             <Button
               key={idx}
               className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
