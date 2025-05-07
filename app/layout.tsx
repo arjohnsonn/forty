@@ -39,13 +39,20 @@ export default async function RootLayout({
         >
           {user && <Sidebar />}
 
-          <main className="flex flex-col min-h-screen">
-            <div className="w-full flex flex-col">
-              <nav className="w-full absolute flex justify-center border-b border-b-foreground/10 h-16">
-                <div className="w-full flex justify-end items-center p-3 px-5 text-sm">
-                  <HeaderAuth />
-                </div>
-              </nav>
+          <nav
+            style={{ left: "var(--sidebar-width)", right: 0 }}
+            className="fixed top-0 z-50 flex justify-center border-b border-b-foreground/10 h-16 transition-all duration-300 bg-background"
+          >
+            <div className="w-full flex justify-end items-center p-3 px-5 text-sm">
+              <HeaderAuth />
+            </div>
+          </nav>
+
+          <main
+            style={{ marginTop: "4rem", marginLeft: "var(--sidebar-width)" }}
+            className="transition-all duration-300 flex flex-col h-[calc(100vh-4rem)]"
+          >
+            <div className="w-full flex flex-col flex-1">
               <div className="flex flex-col flex-1">{children}</div>
             </div>
           </main>
