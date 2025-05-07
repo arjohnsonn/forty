@@ -1,4 +1,3 @@
-// components/sidebar.tsx
 "use client";
 
 import type React from "react";
@@ -7,26 +6,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   MessageSquare,
-  Plus,
-  Settings,
-  BookOpen,
   Calendar,
   GraduationCap,
   Home,
-  ChevronRight,
   Menu,
   Sheet,
   School,
+  PanelRightOpen,
+  PanelRightClose,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Sample conversation history data
-const recentConversations = [
-  {
-    id: "1",
-    title: "Spring 2024 Schedule",
-    timestamp: "2025-05-05T12:00:00Z",
-  },
+// temp any[]
+const recentConversations: any[] = [
+  // {
+  //   id: "1",
+  //   title: "Spring 2024 Schedule",
+  //   timestamp: "2025-05-05T12:00:00Z",
+  // },
 ];
 
 type SidebarItemProps = {
@@ -43,24 +40,22 @@ const SidebarItem = ({
   text,
   active,
   target,
-}: SidebarItemProps) => {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-        active
-          ? "bg-zinc-900 text-white"
-          : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-      )}
-      title={text}
-      target={target}
-    >
-      {icon}
-      <span className="truncate">{text}</span>
-    </Link>
-  );
-};
+}: SidebarItemProps) => (
+  <Link
+    href={href}
+    className={cn(
+      "flex items-center gap-3 py-2 transition-colors duration-150 ease-in-out rounded-lg p-2 px-4",
+      active
+        ? "bg-foreground/10 text-white"
+        : "text-zinc-400 hover:bg-foreground/20 hover:text-white active:bg-zinc-600 active:text-white"
+    )}
+    title={text}
+    target={target}
+  >
+    {icon}
+    <span className="truncate">{text}</span>
+  </Link>
+);
 
 type SectionProps = {
   title?: string;
@@ -71,7 +66,7 @@ const Section = ({ title, children }: SectionProps) => {
   return (
     <div className="mb-4">
       {title && (
-        <h3 className="mb-1 px-3 text-xs font-medium uppercase text-zinc-900">
+        <h3 className="mb-1 px-3 text-xs font-medium uppercase whitespace-nowrap dark:text-neutral-400 text-zinc-900">
           {title}
         </h3>
       )}
@@ -106,29 +101,36 @@ export function Sidebar() {
     }
   }, [pathname, isMobile]);
 
+  useEffect(() => {
+    const width = isMobile ? "0" : collapsed ? "0" : "15rem";
+    document.documentElement.style.setProperty("--sidebar-width", width);
+    return () => {
+      document.documentElement.style.setProperty("--sidebar-width", "0");
+    };
+  }, [collapsed, isMobile]);
+
   return (
     <>
       {!isMobile && (
         <button
           onClick={() => setCollapsed(!collapsed)}
+          style={{ left: collapsed ? 8 : "var(--sidebar-width)" }}
           className={cn(
-            "fixed left-0 top-20 z-50 flex h-8 w-8 items-center justify-center rounded-r-md bg-zinc-900 text-white transition-all duration-300",
-            collapsed ? "left-0" : "left-60"
+            "fixed top-5 z-[100] flex h-8 w-8 items-center justify-center rounded-r-md text-white transition-all duration-300 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
           )}
         >
-          <ChevronRight
-            className={cn(
-              "h-4 w-4 transition-transform",
-              !collapsed && "rotate-180"
-            )}
-          />
+          {!collapsed ? (
+            <PanelRightOpen className="h-6 w-6" />
+          ) : (
+            <PanelRightClose className="h-6 w-6" />
+          )}
         </button>
       )}
 
       {isMobile && (
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="fixed left-4 top-4 z-50 rounded-md bg-zinc-900 p-2 text-white"
+          className="fixed left-4 top-4 z-50 rounded-md p-2 text-white transition-colors duration-150 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -136,13 +138,13 @@ export function Sidebar() {
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-zinc-900 text-white transition-all duration-300",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-background text-foreground transition-all duration-300",
           collapsed ? "w-0 overflow-hidden" : "w-60",
           isMobile && !mobileOpen && "transform -translate-x-full",
           isMobile && mobileOpen && "transform translate-x-0 shadow-lg"
         )}
       >
-        <div className="flex items-center pb-[1.43rem] border-b border-zinc-900 p-4 overflow-hidden">
+        <div className="flex items-center pb-[1.43rem] border-b border-b-foreground/10 p-4 overflow-hidden">
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
           <h1 className="ml-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
             UT Registration GPT
@@ -207,12 +209,7 @@ export function Sidebar() {
         </div>
 
         <div className="border-t border-zinc-900 p-2">
-          <SidebarItem
-            href="/settings"
-            icon={<Settings className="h-4 w-4" />}
-            text="Settings"
-            active={pathname === "/settings"}
-          />
+          {/* bottom of sidebar; could put settings? */}
         </div>
       </div>
 
