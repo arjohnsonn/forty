@@ -167,6 +167,8 @@ const Conversation: React.FC<ConversationProps> = ({
             <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-xl border">
               <TextareaExpand
                 className="rounded-xl w-full mt-2 resize-none overflow-y-auto max-h-60"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -176,7 +178,6 @@ const Conversation: React.FC<ConversationProps> = ({
                 }}
                 placeholder="Type your message..."
                 disabled={isLoading || loading}
-                required
               />
               <div className="flex flex-row justify-start gap-x-2 w-full px-3 pb-3">
                 <div className="flex flex-row gap-x-2 justify-between w-full">
@@ -199,8 +200,13 @@ const Conversation: React.FC<ConversationProps> = ({
                     className="rounded-full h-10 w-10 flex items-center justify-center p-0 bg-black dark:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     variant="outline"
                     type="submit"
+                    disabled={isLoading || loading || !input.trim()}
                   >
-                    <ArrowUp className="w-5 h-5 dark:text-black text-white" />
+                    {isLoading || loading ? (
+                      <Loader2 className="w-5 h-5 animate-spin dark:text-black text-white" />
+                    ) : (
+                      <ArrowUp className="w-5 h-5 dark:text-black text-white" />
+                    )}
                   </Button>
                 </div>
               </div>
