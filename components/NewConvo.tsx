@@ -49,7 +49,7 @@ const starterButtonsConfig = [
 ];
 
 type Props = {
-  onSubmit: (greeting: string, query: string) => void;
+  onSubmit: (query: string) => void;
 };
 
 const NewConvo = ({ onSubmit }: Props) => {
@@ -88,7 +88,8 @@ const NewConvo = ({ onSubmit }: Props) => {
                 const textarea = e.currentTarget as HTMLTextAreaElement;
                 const query = textarea.value.trim();
                 if (!query) return;
-                onSubmit(greeting, query);
+
+                onSubmit(query);
                 textarea.value = "";
                 textarea.dispatchEvent(new Event("input", { bubbles: true }));
               }
@@ -121,8 +122,9 @@ const NewConvo = ({ onSubmit }: Props) => {
                     'textarea[name="query"]'
                   ) as HTMLTextAreaElement | null;
                   if (!textarea || !textarea.value.trim()) return;
+
                   const query = textarea.value.trim();
-                  onSubmit(greeting, query);
+                  onSubmit(query);
                   textarea.value = "";
                   textarea.dispatchEvent(new Event("input", { bubbles: true }));
                 }}
@@ -144,6 +146,7 @@ const NewConvo = ({ onSubmit }: Props) => {
                   'textarea[name="query"]'
                 ) as HTMLTextAreaElement | null;
                 if (!textarea) return;
+
                 textarea.value = btn.value;
                 textarea.dispatchEvent(new Event("input", { bubbles: true }));
                 textarea.focus();

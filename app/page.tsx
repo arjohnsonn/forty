@@ -8,7 +8,7 @@ export default function Home() {
   const [initialQuery, setInitialQuery] = useState("");
   const [showConversation, setShowConversation] = useState(false);
 
-  const handleStartAndNewQuery = async (greeting: string, query: string) => {
+  const handleStartAndNewQuery = async (query: string) => {
     setInitialQuery(query);
     setShowConversation(true);
   };
