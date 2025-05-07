@@ -65,8 +65,8 @@ const NewConvo = ({ onSubmit }: Props) => {
   }, []);
 
   return (
-    <div className="h-screen w-full flex items-center justify-center">
-      <div className="flex flex-col items-center gap-y-3 justify-center h-full">
+    <div className="flex-1 w-full flex items-center justify-center">
+      <div className="flex flex-col items-center gap-y-3 justify-center">
         <h1 className="text-3xl text-center">
           {parts.map((text, idx) =>
             idx % 2 === 1 ? (
