@@ -2,7 +2,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js";
 import { Database } from "../../../types/database.ts";
-import { json } from "node:stream/consumers";
 
 const model = new Supabase.ai.Session("gte-small");
 
