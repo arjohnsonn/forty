@@ -1,16 +1,50 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js";
+import { Database } from "../../../types/database.ts";
 
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
+
+  // load supabase env
+  if (!supabaseUrl || !supabaseKey) {
+    return new Response(
+      JSON.stringify({
+        error: "Missing environment variables.",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  const authorization = req.headers.get("Authorization");
+  if (!authorization) {
+    return new Response(
+      JSON.stringify({ error: `No authorization header passed` }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+    global: {
+      headers: {
+        authorization,
+      },
+    },
+    auth: {
+      persistSession: false,
+    },
+  });
 
   // 1) get term from header
   const termName = req.headers.get("x-term")?.trim();
@@ -30,12 +64,11 @@ Deno.serve(async (req: Request) => {
     return new Response("Error upserting term", { status: 500 });
   }
 
-
   // 3) parse JSON body
   let coursesArr: Array<{
     courseHeader: string;
     sections: Array<{
-      uniqueId: string;
+      uniqueId: number;
       registerUrl?: string;
       instructors: string[];
       instructionMode?: string;
@@ -54,7 +87,6 @@ Deno.serve(async (req: Request) => {
 
   // 4) for each course + section
   for (const { courseHeader, sections } of coursesArr) {
-
     // upsert course
     const { data: courseData, error: courseErr } = await supabase
       .from("courses")
@@ -63,7 +95,9 @@ Deno.serve(async (req: Request) => {
       .single();
     if (courseErr || !courseData) {
       console.error("course upsert error:", courseErr);
-      return new Response(`Error upserting course: ${courseErr.message}`, { status: 500 });
+      return new Response(`Error upserting course: ${courseErr.message}`, {
+        status: 500,
+      });
     }
     const courseId = courseData.id;
 
@@ -73,6 +107,7 @@ Deno.serve(async (req: Request) => {
       const { data: secData, error: secErr } = await supabase
         .from("sections")
         .upsert({
+          id: s.uniqueId,
           course_id: courseId,
           term_id: term.id,
           register_url: s.registerUrl,
@@ -111,7 +146,7 @@ Deno.serve(async (req: Request) => {
           .upsert({
             section_id: sectionId,
             instructor_id: instructorId,
-          }, { onConflict: 'section_id,instructor_id' });
+          }, { onConflict: "section_id,instructor_id" });
         if (linkErr) {
           console.error("link error:", linkErr);
         }
@@ -129,10 +164,11 @@ Deno.serve(async (req: Request) => {
   1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
   2. Make an HTTP request:
 
+  // aggregated-courses-small.json example
   curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/parse_courses' \
     --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
     --header 'Content-Type: application/json' \
-    --header 'x-term: {term e.g. Fall 2024} \
-    --data '@{filepath}'
+    --header 'x-term: Fall 2024' \
+    --data '@aggregated-courses-small.json'
 
 */

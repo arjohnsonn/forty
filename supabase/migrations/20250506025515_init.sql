@@ -16,7 +16,7 @@ CREATE TABLE public.courses (
 
 -- sections (one row per course+term+section‑number)
 CREATE TABLE public.sections (
-  id              BIGSERIAL PRIMARY KEY,    -- the unique_id e.g. '30675'
+  id              BIGINT PRIMARY KEY,    -- the unique_id e.g. '30675'
   course_id       BIGINT   NOT NULL REFERENCES public.courses(id),
   term_id         BIGINT   NOT NULL REFERENCES public.terms(id),
   register_url    TEXT,
