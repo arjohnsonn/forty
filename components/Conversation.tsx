@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea, TextareaExpand } from "@/components/ui/textarea";
 import { SendIcon, Loader2, Check, X, ArrowUp } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Message = {
   id: string;
@@ -87,19 +89,30 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                         : "bg-muted"
                     }`}
                   >
-                    {message.parts.map((part, i) => {
-                      switch (part.type) {
-                        case "text":
-                          return (
-                            <div key={`${message.id}-${i}`}>
-                              {part.text}
-                              {/* {i !== message.content.split("\n").length - 1 && (
-                                <br />
-                              )} */}
-                            </div>
-                          );
-                      }
-                    })}
+                    {(() => {
+                      const combinedText = message.parts
+                        .filter((part) => part.type === "text")
+                        .map((part) => part.text)
+                        .join("");
+
+                      return (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            a: ({ node, ...props }) => (
+                              <a
+                                {...props}
+                                className="hover:underline text-texas"
+                              >
+                                {props.children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {combinedText}
+                        </ReactMarkdown>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
