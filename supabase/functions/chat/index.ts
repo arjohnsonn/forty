@@ -3,15 +3,18 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js";
 import { Database } from "../../../types/database.ts";
 
-import { OpenAIStream, StreamingTextResponse } from "ai";
-import { codeBlock } from "common-tags";
-import OpenAI from "openai";
+import { createOpenAI } from "@ai-sdk/openai";
+import {
+  appendResponseMessages,
+  CoreMessage,
+  createIdGenerator,
+  Message,
+  streamText,
+} from "ai";
 
-const openai = new OpenAIStream({
-  apiKey: Deno.env.get("OPENAI_API_KEY"),
-});
-
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const embedding_model = new Supabase.ai.Session("gte-small");
+import { codeBlock } from "common-tags";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -114,27 +117,65 @@ Deno.serve(async (req) => {
     ? JSON.stringify(sections)
     : "No documents found";
 
-  const completionMessages:
-    OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      {
-        role: "user",
-        content: codeBlock`
+  const completionMessages: CoreMessage[] = [
+    {
+      role: "user",
+      content: codeBlock`
           Sections:
           ${injectedSections}
         `,
-      },
-      ...messages,
-    ];
+    },
+    ...messages,
+  ];
 
-  // Send injected prompt to model and stream response back
-  const completionStream = await openai.chat.Completions.create({
-    model: "gpt-3.5-turbo-0125",
-    messages: completionMessages,
+  const openai = createOpenAI({
+    apiKey: OPENAI_API_KEY,
   });
 
-  const stream = OpenAIStream(completionStream);
+  const systemMessages = ``;
 
-  return new StreamingTextResponse(stream, { headers: corsHeaders });
+  // Send injected prompt to model and stream response back
+  const result = streamText({
+    model: openai.responses(
+      "gpt-3.5-turbo-0125",
+    ),
+    tools: {
+      web_search_preview: openai.tools.webSearchPreview(),
+    },
+    system: systemMessages,
+    messages: completionMessages,
+    temperature: 1,
+    maxTokens: 4096,
+    experimental_generateMessageId: createIdGenerator({
+      prefix: "msgs",
+      size: 16,
+    }),
+    async onFinish({ response }: any) {
+      const { error } = await supabase
+        .from("conversations")
+        .update({
+          messages: appendResponseMessages({
+            messages,
+            responseMessages: response.messages,
+          }),
+        })
+        .eq("id", chatId);
+
+      if (error) {
+        console.error("Error updating chat:", error);
+      }
+    },
+    async onError(error: any) {
+      await console.error("Error:", error);
+    },
+  });
+
+  result.consumeStream();
+
+  return result.toDataStreamResponse({
+    headers: corsHeaders,
+    sendSources: true,
+  });
 });
 
 /* To invoke locally:
