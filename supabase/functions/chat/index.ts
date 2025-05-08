@@ -8,13 +8,11 @@ import {
   appendResponseMessages,
   CoreMessage,
   createIdGenerator,
-  Message,
   streamText,
 } from "ai";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const embedding_model = new Supabase.ai.Session("gte-small");
-import { codeBlock } from "common-tags";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -120,7 +118,7 @@ Deno.serve(async (req) => {
   const completionMessages: CoreMessage[] = [
     {
       role: "user",
-      content: codeBlock`
+      content: `
           Sections:
           ${injectedSections}
         `,
