@@ -55,7 +55,7 @@ CREATE TABLE public.section_instructors (
 -- =================================================================================================
 -- one evaluation record per rawHeader + instructor
 CREATE TABLE public.evaluations (
-  id                 BIGSERIAL PRIMARY KEY,
+  id                 BIGSERIAL PRIMARY KEY REFERENCES public.instructors(id),
   course_header      TEXT     NOT NULL,
   ces_link           TEXT,
   course_questions   JSONB,
