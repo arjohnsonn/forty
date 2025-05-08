@@ -35,6 +35,9 @@ CREATE TABLE public.sections (
   CONSTRAINT uq_section_per_term UNIQUE(id, term_id)
 );
 
+create index on public.sections(id);
+create index on public.sections(course_id);
+create index on public.sections(term_id);
 create index on public.sections using hnsw (embedding vector_ip_ops);
 
 -- instructors
@@ -43,6 +46,8 @@ CREATE TABLE public.instructors (
   name  TEXT      NOT NULL UNIQUE        -- e.g. 'Abimbola Adelakun'
 );
 
+create index on public.instructors(id);
+
 -- link table for the many‑to‑many between sections and instructors
 CREATE TABLE public.section_instructors (
   section_id    BIGINT NOT NULL REFERENCES public.sections(id),
@@ -50,12 +55,16 @@ CREATE TABLE public.section_instructors (
   PRIMARY KEY(section_id, instructor_id)
 );
 
+create index on public.section_instructors(section_id);
+create index on public.section_instructors(instructor_id);
+
 -- =================================================================================================
 -- CES Evaluations
 -- =================================================================================================
 -- one evaluation record per rawHeader + instructor
 CREATE TABLE public.evaluations (
-  id                 BIGSERIAL PRIMARY KEY REFERENCES public.instructors(id),
+  id                 BIGSERIAL PRIMARY KEY,
+  instructor_id      BIGINT REFERENCES public.instructors(id),
   course_header      TEXT     NOT NULL,
   ces_link           TEXT,
   course_questions   JSONB,
@@ -67,6 +76,8 @@ CREATE TABLE public.evaluations (
   response_rate      INTEGER
 );
 
+create index on public.evaluations(instructor_id);
+
 -- join table: an evaluation can cover multiple section uniqueIds,
 -- and each section may have multiple evals (if instructor changes)
 CREATE TABLE public.evaluation_sections (
@@ -75,6 +86,5 @@ CREATE TABLE public.evaluation_sections (
   PRIMARY KEY(evaluation_id, section_id)
 );
 
--- link each evaluation back to the specific instructor
-ALTER TABLE public.evaluations
-  ADD COLUMN instructor_id BIGINT REFERENCES public.instructors(id);
+create index on public.evaluation_sections(evaluation_id);
+create index on public.evaluation_sections(section_id);
