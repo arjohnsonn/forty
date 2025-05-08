@@ -178,6 +178,8 @@ export type Database = {
         Row: {
           core_curriculum: string[] | null
           course_id: number
+          embedding: string | null
+          grade_data: Json | null
           id: number
           instruction_mode: string | null
           register_url: string | null
@@ -185,23 +187,29 @@ export type Database = {
           schedule_hours: string[] | null
           schedule_location: string[] | null
           status: string | null
+          summary: string | null
           term_id: number
         }
         Insert: {
           core_curriculum?: string[] | null
           course_id: number
-          id?: number
+          embedding?: string | null
+          grade_data?: Json | null
+          id: number
           instruction_mode?: string | null
           register_url?: string | null
           schedule_days?: string[] | null
           schedule_hours?: string[] | null
           schedule_location?: string[] | null
           status?: string | null
+          summary?: string | null
           term_id: number
         }
         Update: {
           core_curriculum?: string[] | null
           course_id?: number
+          embedding?: string | null
+          grade_data?: Json | null
           id?: number
           instruction_mode?: string | null
           register_url?: string | null
@@ -209,6 +217,7 @@ export type Database = {
           schedule_hours?: string[] | null
           schedule_location?: string[] | null
           status?: string | null
+          summary?: string | null
           term_id?: number
         }
         Relationships: [
@@ -248,7 +257,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_sections: {
+        Args: { embedding: string; match_threshold: number }
+        Returns: {
+          core_curriculum: string[] | null
+          course_id: number
+          embedding: string | null
+          grade_data: Json | null
+          id: number
+          instruction_mode: string | null
+          register_url: string | null
+          schedule_days: string[] | null
+          schedule_hours: string[] | null
+          schedule_location: string[] | null
+          status: string | null
+          summary: string | null
+          term_id: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

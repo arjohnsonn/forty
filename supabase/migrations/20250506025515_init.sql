@@ -1,3 +1,6 @@
+create extension if not exists pg_net with schema extensions;
+create extension if not exists vector with schema extensions;
+
 -- =================================================================================================
 -- Course Section and Instructors
 -- =================================================================================================
@@ -28,8 +31,11 @@ CREATE TABLE public.sections (
   core_curriculum TEXT[],
   grade_data      JSONB,
   summary         TEXT,
+  embedding       vector (384),
   CONSTRAINT uq_section_per_term UNIQUE(id, term_id)
 );
+
+create index on public.sections using hnsw (embedding vector_ip_ops);
 
 -- instructors
 CREATE TABLE public.instructors (
@@ -72,7 +78,3 @@ CREATE TABLE public.evaluation_sections (
 -- link each evaluation back to the specific instructor
 ALTER TABLE public.evaluations
   ADD COLUMN instructor_id BIGINT REFERENCES public.instructors(id);
-
--- =================================================================================================
--- Course Embeddings
--- =================================================================================================
