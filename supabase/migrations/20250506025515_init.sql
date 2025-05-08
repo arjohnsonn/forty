@@ -26,6 +26,8 @@ CREATE TABLE public.sections (
   schedule_hours  TEXT[],
   schedule_location TEXT[],
   core_curriculum TEXT[],
+  grade_data      JSONB,
+  summary         TEXT,
   CONSTRAINT uq_section_per_term UNIQUE(id, term_id)
 );
 
@@ -70,3 +72,7 @@ CREATE TABLE public.evaluation_sections (
 -- link each evaluation back to the specific instructor
 ALTER TABLE public.evaluations
   ADD COLUMN instructor_id BIGINT REFERENCES public.instructors(id);
+
+-- =================================================================================================
+-- Course Embeddings
+-- =================================================================================================
