@@ -1,4 +1,5 @@
 create schema private;
+grant usage on schema private to service_role;
 
 -- function to retrieve supabase url
 create function private.supabase_url()
