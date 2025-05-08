@@ -3,8 +3,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js";
 import { Database } from "../../../types/database.ts";
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
@@ -12,7 +12,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // load supabase env
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
       JSON.stringify({
         error: "Missing environment variables.",
@@ -35,7 +35,7 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
+  const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {
         authorization,
@@ -77,6 +77,16 @@ Deno.serve(async (req: Request) => {
       scheduleHours?: string[];
       scheduleLocation?: string[];
       coreCurriculum?: string[];
+      gradeData?: {
+        A: number;
+        B: number;
+        C: number;
+        D: number;
+        E: number;
+        F: number;
+        Other: number;
+      };
+      summary?: string;
     }>;
   }>;
   try {
@@ -117,6 +127,8 @@ Deno.serve(async (req: Request) => {
           schedule_hours: s.scheduleHours,
           schedule_location: s.scheduleLocation,
           core_curriculum: s.coreCurriculum,
+          grade_data: s.gradeData,
+          summary: s.summary,
         }, { onConflict: "id,term_id" })
         .select("id")
         .single();
