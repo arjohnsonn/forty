@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js";
 import { Database } from "../../../types/database.ts";
 
 import { createOpenAI } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
 import {
   appendResponseMessages,
   CoreMessage,
@@ -13,7 +14,6 @@ import {
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const embedding_model = new Supabase.ai.Session("gte-small");
-import { codeBlock } from "common-tags";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -21,7 +21,7 @@ const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "Authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
@@ -81,12 +81,12 @@ Deno.serve(async (req) => {
   const { chatId, message, messages } = await req.json();
 
   // generate embedding from current user prompt
-  const output = await embedding_model.run(message, {
-    mean_pool: true,
-    normalize: true,
-  }) as number[];
-
-  const embedding = JSON.stringify(output);
+  const embedding = JSON.stringify(
+    await embedding_model.run(message, {
+      mean_pool: true,
+      normalize: true,
+    }),
+  );
 
   // RAG search
   const { data: sections, error: matchError } = await supabase
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
   const completionMessages: CoreMessage[] = [
     {
       role: "user",
-      content: codeBlock`
+      content: `
           Sections:
           ${injectedSections}
         `,
@@ -127,20 +127,18 @@ Deno.serve(async (req) => {
     ...messages,
   ];
 
-  const openai = createOpenAI({
-    apiKey: OPENAI_API_KEY,
-  });
+  // const openai = createOpenAI({
+  //   apiKey: OPENAI_API_KEY,
+  // });
 
   const systemMessages = ``;
 
   // Send injected prompt to model and stream response back
   const result = streamText({
-    model: openai.responses(
-      "gpt-3.5-turbo-0125",
-    ),
-    tools: {
-      web_search_preview: openai.tools.webSearchPreview(),
-    },
+    model: google("gemini-2.5-flash-preview-04-17"),
+    // tools: {
+    //   web_search_preview: openai.tools.webSearchPreview(),
+    // },
     system: systemMessages,
     messages: completionMessages,
     temperature: 1,
@@ -150,6 +148,13 @@ Deno.serve(async (req) => {
       size: 16,
     }),
     async onFinish({ response }) {
+      // check if user is logged in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return;
+      }
+
+      // save the conversation to the database
       const { error } = await supabase
         .from("conversations")
         .update({
@@ -161,7 +166,7 @@ Deno.serve(async (req) => {
         .eq("id", chatId);
 
       if (error) {
-        console.error("Error updating chat:", error);
+        console.error("Error saving convo:", error);
       }
     },
     async onError(error) {
