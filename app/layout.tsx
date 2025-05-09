@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { createClient } from "@/utils/supabase/server";
+import Navbar from "@/components/navbar";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -15,7 +16,10 @@ export const metadata = {
   description: "Find your perfect UT schedule with AI",
 };
 
-const poppinSans = Poppins({ weight: "400", subsets: ["latin"] });
+const poppinSans = Poppins({
+  weight: ["300", "400", "500", "600", "700"],
+  subsets: ["latin"],
+});
 
 export default async function RootLayout({
   children,
@@ -39,14 +43,7 @@ export default async function RootLayout({
         >
           {user && <Sidebar />}
 
-          <nav
-            style={{ left: "var(--sidebar-width)", right: 0 }}
-            className="fixed top-0 z-50 flex justify-center h-16 transition-all duration-300 bg-background"
-          >
-            <div className="w-full flex justify-end items-center p-3 px-5 text-sm">
-              <HeaderAuth />
-            </div>
-          </nav>
+          <Navbar />
 
           <main
             style={{ marginTop: "4rem", marginLeft: "var(--sidebar-width)" }}

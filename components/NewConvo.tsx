@@ -70,7 +70,7 @@ const NewConvo = ({ onSubmit }: Props) => {
         <h1 className="text-3xl text-center">
           {parts.map((text, idx) =>
             idx % 2 === 1 ? (
-              <span className="text-texas font-bold" key={idx}>
+              <span className="text-texas font-semibold" key={idx}>
                 {text}
               </span>
             ) : (
