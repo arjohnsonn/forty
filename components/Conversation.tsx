@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea, TextareaExpand } from "@/components/ui/textarea";
 import { SendIcon, Loader2, Check, X, ArrowUp } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
 
 type Message = {
@@ -120,25 +122,24 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                   className={`flex items-start gap-2 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
                 >
                   <div
-                    className={`rounded-lg px-3 py-2 ${
+                    className={`rounded-lg px-3 py-2 flex flex-col prose dark:prose-invert prose-headings:mb-4 prose-p:mb-4 last:mb-0 prose-hr:my-8 ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted"
                     }`}
                   >
-                    {message.parts.map((part, i) => {
-                      switch (part.type) {
-                        case "text":
-                          return (
-                            <div key={`${message.id}-${i}`}>
-                              {part.text}
-                              {/* {i !== message.content.split("\n").length - 1 && (
-                                <br />
-                              )} */}
-                            </div>
-                          );
-                      }
-                    })}
+                    {(() => {
+                      const combinedText = message.parts
+                        .filter((part) => part.type === "text")
+                        .map((part) => part.text)
+                        .join("");
+
+                      return (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {combinedText}
+                        </ReactMarkdown>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
