@@ -1,11 +1,19 @@
 {
   "version": "5",
   "specifiers": {
+    "npm:@ai-sdk/google@^1.2.17": "1.2.17_zod@3.24.2",
     "npm:@ai-sdk/openai@^1.3.22": "1.3.22_zod@3.24.2",
-    "npm:ai@^4.3.15": "4.3.15_zod@3.24.2",
-    "npm:common-tags@^1.8.2": "1.8.2"
+    "npm:ai@^4.3.15": "4.3.15_zod@3.24.2"
   },
   "npm": {
+    "@ai-sdk/google@1.2.17_zod@3.24.2": {
+      "integrity": "sha512-mLFLDMCJaDK+j1nvoqeNszazSZIyeSMPi5X+fs5Wh3xWZljGGE0WmFg32RNkFujRB+UnM63EnhPG70WdqOx/MA==",
+      "dependencies": [
+        "@ai-sdk/provider",
+        "@ai-sdk/provider-utils",
+        "zod"
+      ]
+    },
     "@ai-sdk/openai@1.3.22_zod@3.24.2": {
       "integrity": "sha512-QwA+2EkG0QyjVR+7h6FE7iOu2ivNqAVMm9UJZkVxxTk5OIq5fFJDTEI/zICEMuHImTTXR2JjsL6EirJ28Jc4cw==",
       "dependencies": [
@@ -73,9 +81,6 @@
     "chalk@5.4.1": {
       "integrity": "sha512-zgVZuo2WcZgfUEmsn6eO3kINexW8RAE4maiQ8QNs8CtpPCSyMiYsULR3HQYkm3w8FIA3SberyMJMSldGsW+U3w=="
     },
-    "common-tags@1.8.2": {
-      "integrity": "sha512-gk/Z852D2Wtb//0I+kRFNKKE9dIIVirjoqPoA1wJU+XePVXZfGeBpk45+A1rKO4Q43prqWBNY/MiIeRLbPWUaA=="
-    },
     "dequal@2.0.3": {
       "integrity": "sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA=="
     },
@@ -133,9 +138,9 @@
   },
   "workspace": {
     "dependencies": [
+      "npm:@ai-sdk/google@^1.2.17",
       "npm:@ai-sdk/openai@^1.3.22",
-      "npm:ai@^4.3.15",
-      "npm:common-tags@^1.8.2"
+      "npm:ai@^4.3.15"
     ]
   }
 }
