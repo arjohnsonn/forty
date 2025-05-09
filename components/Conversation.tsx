@@ -83,7 +83,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                   className={`flex items-start gap-2 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
                 >
                   <div
-                    className={`rounded-lg px-3 py-2 ${
+                    className={`rounded-lg px-3 py-2 flex flex-col prose dark:prose-invert prose-headings:mb-4 prose-p:mb-4 last:mb-0 prose-hr:my-8 ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted"
@@ -96,19 +96,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                         .join("");
 
                       return (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            a: ({ node, ...props }) => (
-                              <a
-                                {...props}
-                                className="hover:underline text-texas"
-                              >
-                                {props.children}
-                              </a>
-                            ),
-                          }}
-                        >
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {combinedText}
                         </ReactMarkdown>
                       );
