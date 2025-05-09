@@ -8,6 +8,7 @@ import { SendIcon, Loader2, Check, X, ArrowUp } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { createClient } from "@/utils/supabase/client";
 
 type Message = {
   id: string;
@@ -21,8 +22,18 @@ type ConversationProps = {
 };
 
 const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
+  const supabase = createClient();
+  const [token, setToken] = useState<string>(
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  );
+
   const { messages, input, handleInputChange, handleSubmit, status, append } =
-    useChat();
+    useChat({
+      // id,
+      // initialMessages,
+      api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
+      sendExtraMessageFields: true,
+    });
 
   const [rmpEnabled, setRmpEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,12 +41,26 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
   useEffect(() => {
     // have state to prevent double rerender
     if (initialQuery) {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: initialQuery,
+      const getToken = async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) setToken(session.access_token);
+
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          role: "user",
+          content: initialQuery,
+        };
+
+        append(userMessage, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
       };
-      append(userMessage);
+
+      getToken();
     }
   }, []);
 
@@ -50,6 +75,20 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
   }, [input]);
+
+  const handleSubmitToken = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session) setToken(session.access_token);
+
+    handleSubmit(undefined, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  };
 
   return (
     <div className="flex flex-col w-[85%] h-full">
@@ -124,7 +163,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
 
       <div className="bg-background">
         <div className="max-w-screen-lg mx-auto px-4 py-4">
-          <form onSubmit={handleSubmit} className="w-full">
+          <form onSubmit={handleSubmitToken} className="w-full">
             <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-xl border">
               <TextareaExpand
                 className="rounded-xl w-full mt-2 resize-none overflow-y-auto max-h-60"
@@ -134,7 +173,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     if (input.trim())
-                      handleSubmit(e as unknown as React.FormEvent);
+                      handleSubmitToken(e as unknown as React.FormEvent);
                   }
                 }}
                 placeholder="Type your message..."
