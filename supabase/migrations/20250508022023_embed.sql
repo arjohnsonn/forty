@@ -69,7 +69,7 @@ create or replace function public.match_sections(
 )
 returns setof sections
 language plpgsql
-set search_path = ''
+set search_path = 'public', 'extensions'
 as $$
 #variable_conflict use_variable
 begin
