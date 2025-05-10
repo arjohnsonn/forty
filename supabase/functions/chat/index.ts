@@ -3,7 +3,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js";
 import { Database } from "../../../types/database.ts";
 
-import { createOpenAI } from "@ai-sdk/openai";
+import { Redis } from "@upstash/redis";
+import { Ratelimit } from "@upstash/ratelimit";
 import { google } from "@ai-sdk/google";
 import {
   appendResponseMessages,
@@ -12,11 +13,15 @@ import {
   streamText,
 } from "ai";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const embedding_model = new Supabase.ai.Session("gte-small");
+// types for rate limit duration
+type Unit = "ms" | "s" | "m" | "h" | "d";
+type Duration = `${number} ${Unit}` | `${number}${Unit}`;
 
+// environment variables
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+const redisUrl = Deno.env.get("UPSTASH_REDIS_REST_URL");
+const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,11 +29,104 @@ export const corsHeaders = {
     "Authorization, x-client-info, apikey, content-type",
 };
 
+const embedding_model = new Supabase.ai.Session("gte-small");
+
+const checkRateLimit = async (
+  tokens: number,
+  window: Duration,
+  req: Request,
+  ip: string,
+  authorization: string,
+) => {
+  // initialize redis and rate limit client
+  const redis = new Redis({
+    url: redisUrl,
+    token: redisToken,
+  });
+
+  const ratelimit = new Ratelimit({
+    redis,
+    limiter: Ratelimit.fixedWindow(tokens, window), // token requests every window
+    analytics: true,
+  });
+
+  const userAgent = req.headers.get("user-agent") || "unknown";
+
+  // Create a composite key for rate limiting
+  // If authorization exists, use token hash + IP
+  // Otherwise, use IP + user agent
+  const rateLimitKey = authorization
+    ? `${ip}:${authorization.split(" ")[1]}`
+    : `${ip}:${userAgent}`;
+
+  // Check if the request is rate limited
+  return await ratelimit.limit(rateLimitKey, {
+    geo: {
+      country: req.headers.get("cf-ipcountry")!,
+      region: req.headers.get("cf-ipregion")!,
+      city: req.headers.get("cf-ipcity")!,
+      ip: ip,
+    },
+    ip: ip,
+    userAgent: userAgent,
+    country: req.headers.get("cf-ipcountry")!,
+  });
+};
+
 Deno.serve(async (req) => {
+  // Check for CORS and only allow POST requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   } else if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
+  }
+
+  // Get supabase authorization header
+  const authorization = req.headers.get("Authorization");
+  if (!authorization) {
+    return new Response(
+      JSON.stringify({ error: `No authorization header passed` }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // Check for ip for rate limiting
+  const ip = req.headers.get("x-forwarded-for") ||
+    req.headers.get("cf-connecting-ip");
+  if (!ip) {
+    return new Response(
+      JSON.stringify({ error: `No IP address found` }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // rate limit
+  const {
+    success,
+    reset,
+    reason,
+  } = await checkRateLimit(5, "12h", req, ip, authorization);
+
+  // block rate limited request
+  if (!success) {
+    return new Response(
+      JSON.stringify({
+        error: `Rate limit exceeded. Try again on ${
+          new Date(reset).toString()
+        }.`,
+        reason: reason,
+      }),
+      {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 
   // load supabase env
@@ -37,17 +135,6 @@ Deno.serve(async (req) => {
       JSON.stringify({
         error: "Missing environment variables.",
       }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
-  const authorization = req.headers.get("Authorization");
-  if (!authorization) {
-    return new Response(
-      JSON.stringify({ error: `No authorization header passed` }),
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
@@ -94,7 +181,7 @@ Deno.serve(async (req) => {
       embedding,
       match_threshold: 0.8,
     })
-    .select("*")
+    .select("summary")
     .limit(5);
 
   if (matchError) {
@@ -148,7 +235,7 @@ Deno.serve(async (req) => {
       size: 16,
     }),
     async onFinish({ response }) {
-      // check if user is logged in
+      // check if user is logged in to save convo
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         return;
