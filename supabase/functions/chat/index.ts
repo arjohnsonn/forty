@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
     global: {
       headers: {
         ...corsHeaders,
-        Authorization: jwtToken
+        Authorization: jwtToken,
       },
     },
     auth: {
@@ -152,14 +152,17 @@ Deno.serve(async (req) => {
     if (!success) {
       return new Response(
         JSON.stringify({
-          error: `Rate limit exceeded. Try again on ${
-            new Date(reset).toString()
-          }.`,
-          reason: reason,
+          error: {
+            name: "Rate Limit Error",
+            message: `Rate limit exceeded. Try again on ${
+              new Date(reset).toLocaleString()
+            }.`,
+            reason: reason,
+          },
         }),
         {
           status: 429,
-          headers: {  ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
       );
     }
