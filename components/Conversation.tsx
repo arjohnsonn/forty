@@ -10,6 +10,7 @@ import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
+import { ToastAction } from "./ui/toast";
 
 type Message = {
   id: string;
@@ -36,12 +37,20 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
       // initialMessages,
       api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
       sendExtraMessageFields: true,
-      onError: (error) => {
-        console.error("Error:", error);
+      onError: (response) => {
+        const {
+          error: { name, message },
+        } = JSON.parse(response.message) as {
+          error: {
+            name: string;
+            message: string;
+          };
+        };
+
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "There was a problem with your request.",
+          title: name,
+          description: message
         });
       },
     });
