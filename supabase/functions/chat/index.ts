@@ -73,7 +73,12 @@ Deno.serve(async (req) => {
   if (!embedding_model) {
     console.error("Unable to load embedding model");
     return new Response(
-      JSON.stringify({ error: `Embedding model is unavailable` }),
+      JSON.stringify({
+        error: {
+          name: "Embedding Error",
+          message: "Embedding model is unavailable",
+        },
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -86,7 +91,12 @@ Deno.serve(async (req) => {
     req.headers.get("cf-connecting-ip");
   if (!ip) {
     return new Response(
-      JSON.stringify({ error: `No IP address found` }),
+      JSON.stringify({
+        error: {
+          name: "Request Error",
+          message: "Missing IP header",
+        },
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -101,7 +111,12 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get("Authorization");
   if (!authorization) {
     return new Response(
-      JSON.stringify({ error: `No authorization header passed` }),
+      JSON.stringify({
+        error: {
+          name: "Request Error",
+          message: "Missing authorization header",
+        },
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -114,7 +129,10 @@ Deno.serve(async (req) => {
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
       JSON.stringify({
-        error: "Missing supabase environment variables.",
+        error: {
+          name: "Internal Server Error",
+          message: "Missing environment variables",
+        },
       }),
       {
         status: 500,
@@ -193,7 +211,10 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        error: "Error finding sections, please try again.",
+        error: {
+          name: "Internal Server Error",
+          message: "Error finding sections, please try again.",
+        },
       }),
       {
         status: 500,
