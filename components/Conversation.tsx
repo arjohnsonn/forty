@@ -38,19 +38,27 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
       api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
       sendExtraMessageFields: true,
       onError: (response) => {
-        const {
-          error: { name, message },
-        } = JSON.parse(response.message) as {
-          error: {
-            name: string;
-            message: string;
-          };
-        };
+        // Default toast error messages
+        let errorName = "Error";
+        let errorMessage = "Something went wrong. Please try again.";
+
+        try {
+          // Attempt to parse the error message in standard format
+          const {
+            error: { name, message },
+          } = JSON.parse(response.message);
+
+          errorName = name;
+          errorMessage = message;
+        } catch (e) {
+          // If parsing fails, use the default error message
+          errorMessage = response.message;
+        }
 
         toast({
           variant: "destructive",
-          title: name,
-          description: message
+          title: errorName,
+          description: errorMessage,
         });
       },
     });
