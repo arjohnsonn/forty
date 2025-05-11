@@ -3,8 +3,9 @@
 import React from "react";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea, TextareaExpand } from "@/components/ui/textarea";
-import { SendIcon, Loader2, Check, X, ArrowUp } from "lucide-react";
+import { TextareaExpand } from "@/components/ui/textarea";
+import { Loader2, Check, X, ArrowUp } from "lucide-react";
+import { useToast } from "@/components/hooks/use-toast";
 import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,6 +23,8 @@ type ConversationProps = {
 };
 
 const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
+  const { toast } = useToast();
+
   const supabase = createClient();
   const [token, setToken] = useState<string>(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
@@ -33,6 +36,14 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
       // initialMessages,
       api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
       sendExtraMessageFields: true,
+      onError: (error) => {
+        console.error("Error:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "There was a problem with your request.",
+        });
+      },
     });
 
   const [rmpEnabled, setRmpEnabled] = useState(true);
