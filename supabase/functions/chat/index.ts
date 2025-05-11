@@ -53,9 +53,7 @@ const checkRateLimit = async (
   // Create a composite key for rate limiting
   // If authorization exists, use token hash + IP
   // Otherwise, use IP + user agent
-  const rateLimitKey = token
-    ? `${ip}:${token}`
-    : `${ip}:${userAgent}`;
+  const rateLimitKey = token ? `${ip}:${token}` : `${ip}:${userAgent}`;
 
   // Check if the request is rate limited
   return await ratelimit.limit(rateLimitKey, {
@@ -78,7 +76,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ error: `Embedding model is unavailable` }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
@@ -91,7 +89,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ error: `No IP address found` }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
@@ -106,7 +104,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ error: `No authorization header passed` }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
@@ -120,7 +118,7 @@ Deno.serve(async (req) => {
       }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
@@ -129,7 +127,8 @@ Deno.serve(async (req) => {
   const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {
-        Authorization: jwtToken,
+        ...corsHeaders,
+        Authorization: jwtToken
       },
     },
     auth: {
@@ -160,7 +159,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 429,
-          headers: { "Content-Type": "application/json" },
+          headers: {  ...corsHeaders, "Content-Type": "application/json" },
         },
       );
     }
@@ -195,7 +194,7 @@ Deno.serve(async (req) => {
       }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
