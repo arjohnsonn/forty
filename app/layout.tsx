@@ -5,6 +5,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { createClient } from "@/utils/supabase/server";
 import Navbar from "@/components/navbar";
+import { Toaster } from "@/components/ui/toaster";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -53,6 +54,7 @@ export default async function RootLayout({
               <div className="flex flex-col flex-1">{children}</div>
             </div>
           </main>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

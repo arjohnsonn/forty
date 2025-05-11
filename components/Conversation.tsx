@@ -3,12 +3,14 @@
 import React from "react";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea, TextareaExpand } from "@/components/ui/textarea";
-import { SendIcon, Loader2, Check, X, ArrowUp } from "lucide-react";
+import { TextareaExpand } from "@/components/ui/textarea";
+import { Loader2, Check, X, ArrowUp } from "lucide-react";
+import { useToast } from "@/components/hooks/use-toast";
 import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
+import { ToastAction } from "./ui/toast";
 
 type Message = {
   id: string;
@@ -22,6 +24,8 @@ type ConversationProps = {
 };
 
 const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
+  const { toast } = useToast();
+
   const supabase = createClient();
   const [token, setToken] = useState<string>(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
@@ -33,6 +37,30 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
       // initialMessages,
       api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
       sendExtraMessageFields: true,
+      onError: (response) => {
+        // Default toast error messages
+        let errorName = "Error";
+        let errorMessage = "Something went wrong. Please try again.";
+
+        try {
+          // Attempt to parse the error message in standard format
+          const {
+            error: { name, message },
+          } = JSON.parse(response.message);
+
+          errorName = name;
+          errorMessage = message;
+        } catch (e) {
+          // If parsing fails, use the default error message
+          errorMessage = response.message;
+        }
+
+        toast({
+          variant: "destructive",
+          title: errorName,
+          description: errorMessage,
+        });
+      },
     });
 
   const [rmpEnabled, setRmpEnabled] = useState(true);

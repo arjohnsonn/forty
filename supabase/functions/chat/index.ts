@@ -3,7 +3,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js";
 import { Database } from "../../../types/database.ts";
 
-import { createOpenAI } from "@ai-sdk/openai";
+import { Redis } from "@upstash/redis";
+import { Ratelimit } from "@upstash/ratelimit";
 import { google } from "@ai-sdk/google";
 import {
   appendResponseMessages,
@@ -12,11 +13,15 @@ import {
   streamText,
 } from "ai";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const embedding_model = new Supabase.ai.Session("gte-small");
+// types for rate limit duration
+type Unit = "ms" | "s" | "m" | "h" | "d";
+type Duration = `${number} ${Unit}` | `${number}${Unit}`;
 
+// environment variables
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+const redisUrl = Deno.env.get("UPSTASH_REDIS_REST_URL");
+const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,58 +29,162 @@ export const corsHeaders = {
     "Authorization, x-client-info, apikey, content-type",
 };
 
+const embedding_model = new Supabase.ai.Session("gte-small");
+
+const checkRateLimit = async (
+  tokens: number,
+  window: Duration,
+  ip: string,
+  userAgent: string,
+  token: string,
+) => {
+  // initialize redis and rate limit client
+  const redis = new Redis({
+    url: redisUrl,
+    token: redisToken,
+  });
+
+  const ratelimit = new Ratelimit({
+    redis,
+    limiter: Ratelimit.fixedWindow(tokens, window),
+    analytics: true,
+  });
+
+  // Create a composite key for rate limiting
+  // If authorization exists, use token hash + IP
+  // Otherwise, use IP + user agent
+  const rateLimitKey = token ? `${ip}:${token}` : `${ip}:${userAgent}`;
+
+  // Check if the request is rate limited
+  return await ratelimit.limit(rateLimitKey, {
+    ip: ip,
+    userAgent: userAgent,
+  });
+};
+
 Deno.serve(async (req) => {
+  // Check for CORS and only allow POST requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   } else if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  // load supabase env
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return new Response(
-      JSON.stringify({
-        error: "Missing environment variables.",
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
-  const authorization = req.headers.get("Authorization");
-  if (!authorization) {
-    return new Response(
-      JSON.stringify({ error: `No authorization header passed` }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
   if (!embedding_model) {
     console.error("Unable to load embedding model");
     return new Response(
-      JSON.stringify({ error: `Embedding model is unavailable` }),
+      JSON.stringify({
+        error: {
+          name: "Embedding Error",
+          message: "Embedding model is unavailable",
+        },
+      }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
 
+  // Get ip header for rate limiting identiifcation
+  const ip = req.headers.get("x-forwarded-for") ||
+    req.headers.get("cf-connecting-ip");
+  if (!ip) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          name: "Request Error",
+          message: "Missing IP header",
+        },
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // Get userAgent for rate limiting identification
+  const userAgent = req.headers.get("user-agent") || "unknown";
+
+  // Get supabase authorization header
+  const authorization = req.headers.get("Authorization");
+  if (!authorization) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          name: "Request Error",
+          message: "Missing authorization header",
+        },
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+  const jwtToken = authorization.split(" ")[1];
+
+  // check supabase env variables
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return new Response(
+      JSON.stringify({
+        error: {
+          name: "Internal Server Error",
+          message: "Missing environment variables",
+        },
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // init supabase client
   const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     global: {
       headers: {
-        authorization,
+        ...corsHeaders,
+        Authorization: jwtToken,
       },
     },
     auth: {
       persistSession: false,
     },
   });
+
+  // get user from supabase
+  const { data: { user } } = await supabase.auth.getUser(jwtToken);
+
+  // only rate limit guest users, unlimited chat api requests for logged in users for now
+  if (!user) {
+    // rate limit
+    const {
+      success,
+      reset,
+      reason,
+    } = await checkRateLimit(5, "12h", ip, userAgent, jwtToken);
+
+    // block rate limited request
+    if (!success) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            name: "Rate Limit Error",
+            message: `Rate limit exceeded. Try again on ${
+              new Date(reset).toLocaleString()
+            }.`,
+            reason: reason,
+          },
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+  }
 
   // fetch request chat prompt params
   const { chatId, message, messages } = await req.json();
@@ -94,7 +203,7 @@ Deno.serve(async (req) => {
       embedding,
       match_threshold: 0.8,
     })
-    .select("*")
+    .select("summary")
     .limit(5);
 
   if (matchError) {
@@ -102,11 +211,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        error: "Error finding sections, please try again.",
+        error: {
+          name: "Internal Server Error",
+          message: "Error finding sections, please try again.",
+        },
       }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
     );
   }
@@ -127,10 +239,6 @@ Deno.serve(async (req) => {
     ...messages,
   ];
 
-  // const openai = createOpenAI({
-  //   apiKey: OPENAI_API_KEY,
-  // });
-
   const systemMessages = ``;
 
   // Send injected prompt to model and stream response back
@@ -148,8 +256,7 @@ Deno.serve(async (req) => {
       size: 16,
     }),
     async onFinish({ response }) {
-      // check if user is logged in
-      const { data: { user } } = await supabase.auth.getUser();
+      // only allow logged in users to save conversations
       if (!user) {
         return;
       }
