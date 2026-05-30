@@ -209,6 +209,7 @@ export type Database = {
           grade_data: Json | null
           id: number
           instruction_mode: string | null
+          instructor_grades: Json | null
           register_url: string | null
           schedule_days: string[] | null
           schedule_hours: string[] | null
@@ -224,6 +225,7 @@ export type Database = {
           grade_data?: Json | null
           id: number
           instruction_mode?: string | null
+          instructor_grades?: Json | null
           register_url?: string | null
           schedule_days?: string[] | null
           schedule_hours?: string[] | null
@@ -239,6 +241,7 @@ export type Database = {
           grade_data?: Json | null
           id?: number
           instruction_mode?: string | null
+          instructor_grades?: Json | null
           register_url?: string | null
           schedule_days?: string[] | null
           schedule_hours?: string[] | null
@@ -293,6 +296,7 @@ export type Database = {
           grade_data: Json | null
           id: number
           instruction_mode: string | null
+          instructor_grades: Json | null
           register_url: string | null
           schedule_days: string[] | null
           schedule_hours: string[] | null
@@ -300,6 +304,25 @@ export type Database = {
           status: string | null
           summary: string | null
           term_id: number
+        }[]
+      }
+      match_sections_detailed: {
+        Args: { embedding: string; match_threshold: number }
+        Returns: {
+          section_id: number
+          course_header: string
+          summary: string | null
+          instruction_mode: string | null
+          status: string | null
+          register_url: string | null
+          schedule_days: string[] | null
+          schedule_hours: string[] | null
+          schedule_location: string[] | null
+          core_curriculum: string[] | null
+          instructors: string[]
+          grade_data: Json | null
+          instructor_grades: Json | null
+          evaluations: Json
         }[]
       }
     }

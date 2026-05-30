@@ -32,24 +32,3 @@ create policy "Individuals can delete their conversations" on public.conversatio
 -- Enable realtime
 alter
   publication supabase_realtime add table public.conversations;
-
--- Legend-State helper to facilitate "Sync only diffs" (changesSince: 'last-sync') mode
--- CREATE OR REPLACE FUNCTION handle_times()
---     RETURNS trigger AS
---     $$
---     BEGIN
---     IF (TG_OP = 'INSERT') THEN
---         NEW.created_at := now();
---         NEW.updated_at := now();
---     ELSEIF (TG_OP = 'UPDATE') THEN
---         NEW.created_at = OLD.created_at;
---         NEW.updated_at = now();
---     END IF;
---     RETURN NEW;
---     END;
---     $$ language plpgsql;
-
--- CREATE TRIGGER handle_times
---     BEFORE INSERT OR UPDATE ON public.conversations
---     FOR EACH ROW
--- EXECUTE PROCEDURE handle_times();

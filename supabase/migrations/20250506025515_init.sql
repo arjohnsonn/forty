@@ -1,3 +1,6 @@
+-- Put `extensions` on the search_path so unqualified `vector` resolves under `supabase db push`.
+set search_path = public, extensions;
+
 create extension if not exists pg_net with schema extensions;
 create extension if not exists vector with schema extensions;
 
