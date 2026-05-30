@@ -10,7 +10,6 @@ import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
-import { ToastAction } from "./ui/toast";
 import CourseChips from "@/components/CourseChips";
 
 type Message = {
@@ -125,85 +124,70 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
   };
 
   return (
-    <div className="flex flex-col w-[85%] h-full">
-      <div className="bg-background">
-        <div className="max-w-screen-lg mx-auto px-4 py-4">
-          <h1 className="text-xl font-bold">{title}</h1>
+    <div className="flex h-full w-full flex-col">
+      {/* Sticky title */}
+      <header className="shrink-0 border-b border-border/60 bg-background">
+        <div className="mx-auto w-full max-w-3xl px-4 py-3">
+          <h1 className="text-lg font-semibold">{title}</h1>
         </div>
-      </div>
+      </header>
 
+      {/* Scrollable messages */}
       <div
         className="flex-1 overflow-y-auto"
         style={{ scrollbarGutter: "stable both-edges" }}
       >
-        <div className="max-w-screen-lg mx-auto px-4 py-4 flex flex-col h-full space-y-4">
+        <div className="mx-auto w-full max-w-3xl px-4 py-6">
           {messages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-center text-muted-foreground">
+            <div className="flex min-h-[50vh] items-center justify-center text-center text-muted-foreground">
               <div>
                 <p>No messages yet</p>
-                <p className="text-sm">
-                  Start a conversation by typing a message below
-                </p>
+                <p className="text-sm">Start a conversation by typing a message below</p>
               </div>
             </div>
           ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`flex items-start gap-2 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : ""}`}
-                >
-                  <div
-                    className={`rounded-lg px-3 py-2 flex flex-col prose dark:prose-invert prose-headings:mb-4 prose-p:mb-4 last:mb-0 prose-hr:my-8 ${
-                      message.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
-                  >
-                    {(() => {
-                      const combinedText = message.parts
-                        .filter((part) => part.type === "text")
-                        .map((part) => part.text)
-                        .join("");
-
-                      return (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {combinedText}
-                        </ReactMarkdown>
-                      );
-                    })()}
-                    {message.role === "assistant" && (
-                      <CourseChips annotations={message.annotations} />
-                    )}
+            <div className="space-y-6">
+              {messages.map((message) => {
+                const text = message.parts
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("");
+                return message.role === "user" ? (
+                  <div key={message.id} className="flex justify-end">
+                    <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-muted px-4 py-2.5">
+                      {text}
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))
-          )}
+                ) : (
+                  <div
+                    key={message.id}
+                    className="prose max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted"
+                  >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                    <CourseChips annotations={message.annotations} />
+                  </div>
+                );
+              })}
 
-          {status == "submitted" && (
-            <div className="flex justify-start">
-              <div className="flex items-start gap-2 max-w-[80%]">
-                <div className="rounded-lg px-3 py-2 bg-muted flex items-center">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              {status === "submitted" && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Thinking...
                 </div>
-              </div>
+              )}
             </div>
           )}
-
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      <div className="bg-background">
-        <div className="max-w-screen-lg mx-auto px-4 py-4">
-          <form onSubmit={handleSubmitToken} className="w-full">
-            <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-xl border">
+      {/* Pinned input bar */}
+      <div className="shrink-0 bg-background">
+        <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-2">
+          <form onSubmit={handleSubmitToken}>
+            <div className="flex flex-col rounded-2xl border bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring">
               <TextareaExpand
-                className="rounded-xl w-full mt-2 resize-none overflow-y-auto max-h-60"
+                className="max-h-60 w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-3 focus-visible:ring-0"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={(e) => {
@@ -213,39 +197,35 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                       handleSubmitToken(e as unknown as React.FormEvent);
                   }
                 }}
-                placeholder="Type your message..."
+                placeholder="Message UT Registration GPT…"
                 disabled={status === "submitted"}
               />
-              <div className="flex flex-row justify-start gap-x-2 w-full px-3 pb-3">
-                <div className="flex flex-row gap-x-2 justify-between w-full">
-                  <Button
-                    className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
-                    variant="outline"
-                    type="button"
-                    onClick={() => setRmpEnabled(!rmpEnabled)}
-                  >
-                    {rmpEnabled ? (
-                      <Check className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <X className="w-5 h-5 text-red-500" />
-                    )}
-                    <span>RMP</span>
-                  </Button>
-                </div>
-                <div className="flex flex-row">
-                  <Button
-                    className="rounded-full h-10 w-10 flex items-center justify-center p-0 bg-black dark:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    variant="outline"
-                    type="submit"
-                    disabled={status === "submitted" || !input.trim()}
-                  >
-                    {status === "submitted" ? (
-                      <Loader2 className="w-5 h-5 animate-spin dark:text-black text-white" />
-                    ) : (
-                      <ArrowUp className="w-5 h-5 dark:text-black text-white" />
-                    )}
-                  </Button>
-                </div>
+              <div className="flex items-center justify-between px-3 pb-3">
+                <Button
+                  className="h-9 gap-2 rounded-full px-3"
+                  variant="outline"
+                  type="button"
+                  onClick={() => setRmpEnabled(!rmpEnabled)}
+                >
+                  {rmpEnabled ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <X className="h-4 w-4 text-red-500" />
+                  )}
+                  <span>RMP</span>
+                </Button>
+                <Button
+                  className="h-9 w-9 rounded-full bg-black p-0 disabled:opacity-50 dark:bg-white"
+                  variant="outline"
+                  type="submit"
+                  disabled={status === "submitted" || !input.trim()}
+                >
+                  {status === "submitted" ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-white dark:text-black" />
+                  ) : (
+                    <ArrowUp className="h-5 w-5 text-white dark:text-black" />
+                  )}
+                </Button>
               </div>
             </div>
           </form>

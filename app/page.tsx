@@ -13,13 +13,11 @@ export default function Home() {
     setShowConversation(true);
   };
 
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      {!showConversation ? (
-        <NewConvo onSubmit={handleStartAndNewQuery} />
-      ) : (
-        <Conversation title="New chat" initialQuery={initialQuery} />
-      )}
+  return showConversation ? (
+    <Conversation title="New chat" initialQuery={initialQuery} />
+  ) : (
+    <div className="flex flex-1 items-center justify-center">
+      <NewConvo onSubmit={handleStartAndNewQuery} />
     </div>
   );
 }

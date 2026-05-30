@@ -24,7 +24,7 @@ const TextareaExpand = React.forwardRef<
   React.ComponentProps<"textarea">
 >(({ className, style, onInput, ...props }, ref) => {
   // Auto-resize handler: adjust height to fit content
-  const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+  const handleInput: NonNullable<React.ComponentProps<"textarea">["onInput"]> = (e) => {
     const target = e.currentTarget;
     target.style.height = "auto";
     target.style.height = `${target.scrollHeight}px`;
