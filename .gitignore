@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# private data engine — scrapers, parsers, build, DB inserter (keep out of the public repo)
+/scripts/
