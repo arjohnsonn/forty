@@ -7,7 +7,7 @@ type Props = {};
 const Navbar = (props: Props) => {
   return (
     <nav
-      style={{ left: "var(--sidebar-width)", right: 0 }}
+      style={{ left: "var(--sidebar-width, 0px)", right: 0 }}
       className="fixed top-0 w-full z-50 flex justify-center h-16 transition-all duration-300 bg-background"
     >
       <NavbarHeader />

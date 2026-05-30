@@ -92,8 +92,9 @@ const SYSTEM_PROMPT =
   `prose uses "First Last" (e.g. "Charlton N Lewis") — treat them as the same person when matching a query. ` +
   `instructor_grades covers every instructor of a section, but evaluations may exist for only some of them; ` +
   `if a professor has no evaluation entry, cite only their grade distribution rather than inventing ratings. ` +
-  `Cite concrete grade percentages and ratings when relevant. If the provided sections do not contain the ` +
-  `answer, say so instead of guessing.`;
+  `Cite concrete grade percentages and ratings when relevant. Do not mention course enrollment status ` +
+  `(open, closed, waitlisted) — it is not provided and changes over time. If the provided sections do not ` +
+  `contain the answer, say so instead of guessing.`;
 
 export default {
   async fetch(
@@ -224,9 +225,16 @@ export default {
         );
       }
 
+      // `status` (waitlisted/open/closed) is point-in-time and can't be updated
+      // live, so drop it before it reaches the model or the UI chips.
+      const cleanSections = (sections ?? []).map((s: Record<string, unknown>) => {
+        const { status, ...rest } = s;
+        return rest;
+      });
+
       const injectedSections =
-        sections && sections.length > 0
-          ? JSON.stringify(sections)
+        cleanSections.length > 0
+          ? JSON.stringify(cleanSections)
           : "No documents found";
 
       const completionMessages: CoreMessage[] = [
@@ -242,10 +250,10 @@ export default {
         headers: cors,
         // Attach retrieved sections for the UI's course chips (read via message.annotations).
         execute: (dataStream) => {
-          if (sections && sections.length > 0) {
+          if (cleanSections.length > 0) {
             dataStream.writeMessageAnnotation({
               type: "courses",
-              sections,
+              sections: cleanSections,
             } as any);
           }
           const result = streamText({
@@ -267,8 +275,8 @@ export default {
               });
               // Re-attach the annotation (not in response.messages) so reloads keep the chips.
               const last = saved[saved.length - 1] as any;
-              if (last && sections && sections.length > 0) {
-                last.annotations = [{ type: "courses", sections }];
+              if (last && cleanSections.length > 0) {
+                last.annotations = [{ type: "courses", sections: cleanSections }];
               }
               const { error } = await supabase
                 .from("conversations")

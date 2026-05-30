@@ -3,15 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { TextareaExpand } from "@/components/ui/textarea";
-import {
-  Check,
-  X,
-  PencilOff,
-  TrendingUp,
-  Laptop,
-  Star,
-  ArrowUp,
-} from "lucide-react";
+import { PencilOff, TrendingUp, Laptop, Star, ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const randomGreetings = [
@@ -53,7 +45,6 @@ type Props = {
 };
 
 const NewConvo = ({ onSubmit }: Props) => {
-  const [rmpEnabled, setRmpEnabled] = useState(true);
   // Deterministic seed so text shows on first paint; randomized after mount.
   const [greeting, setGreeting] = useState(randomGreetings[0]);
   const [parts, setParts] = useState<string[]>(randomGreetings[0].split("*"));
@@ -80,9 +71,9 @@ const NewConvo = ({ onSubmit }: Props) => {
           )}
         </h1>
 
-        <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-xl border">
+        <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-3xl border shadow-sm focus-within:ring-1 focus-within:ring-ring transition-colors">
           <TextareaExpand
-            className="rounded-xl w-full mt-2 resize-none overflow-y-auto max-h-60"
+            className="rounded-3xl w-full mt-2 resize-none overflow-y-auto max-h-60"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -98,39 +89,23 @@ const NewConvo = ({ onSubmit }: Props) => {
             name="query"
             required
           />
-          <div className="flex flex-row justify-start gap-x-2 w-full px-3 pb-3">
-            <div className="flex flex-row gap-x-2 justify-between w-full">
-              <Button
-                className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
-                variant="outline"
-                onClick={() => setRmpEnabled(!rmpEnabled)}
-              >
-                {rmpEnabled ? (
-                  <Check className="w-5 h-5 text-green-500" />
-                ) : (
-                  <X className="w-5 h-5 text-red-500" />
-                )}
-                <span>RMP</span>
-              </Button>
-            </div>
-            <div className="flex flex-row">
-              <Button
-                className="rounded-full h-10 w-10 flex items-center justify-center p-0 bg-black dark:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                variant="outline"
-                onClick={() => {
-                  const textarea = document.querySelector(
-                    'textarea[name="query"]'
-                  ) as HTMLTextAreaElement | null;
-                  if (!textarea || !textarea.value.trim()) return;
-                  const query = textarea.value.trim();
-                  onSubmit(greeting, query);
-                  textarea.value = "";
-                  textarea.dispatchEvent(new Event("input", { bubbles: true }));
-                }}
-              >
-                <ArrowUp className="w-5 h-5 dark:text-black text-white" />
-              </Button>
-            </div>
+          <div className="flex flex-row justify-end w-full px-3 pb-3">
+            <Button
+              className="rounded-full h-10 w-10 flex items-center justify-center p-0 bg-black dark:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              variant="outline"
+              onClick={() => {
+                const textarea = document.querySelector(
+                  'textarea[name="query"]'
+                ) as HTMLTextAreaElement | null;
+                if (!textarea || !textarea.value.trim()) return;
+                const query = textarea.value.trim();
+                onSubmit(greeting, query);
+                textarea.value = "";
+                textarea.dispatchEvent(new Event("input", { bubbles: true }));
+              }}
+            >
+              <ArrowUp className="w-5 h-5 dark:text-black text-white" />
+            </Button>
           </div>
         </div>
 

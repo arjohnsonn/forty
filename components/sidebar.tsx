@@ -1,30 +1,38 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  MessageSquare,
   Calendar,
   GraduationCap,
-  Home,
+  SquarePen,
   Menu,
   Sheet,
   School,
   PanelRightOpen,
   PanelRightClose,
+  Trash2,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/utils/supabase/client";
+import { parseMessages, deriveTitle } from "@/lib/conversations";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { useToast } from "@/components/hooks/use-toast";
+import { signOutAction } from "@/app/actions";
 
-// temp any[]
-const recentConversations: any[] = [
-  // {
-  //   id: "1",
-  //   title: "Spring 2024 Schedule",
-  //   timestamp: "2025-05-05T12:00:00Z",
-  // },
-];
+type Conversation = { id: string; title: string };
 
 type SidebarItemProps = {
   href: string;
@@ -34,20 +42,14 @@ type SidebarItemProps = {
   target?: string;
 };
 
-const SidebarItem = ({
-  href,
-  icon,
-  text,
-  active,
-  target,
-}: SidebarItemProps) => (
+const SidebarItem = ({ href, icon, text, active, target }: SidebarItemProps) => (
   <Link
     href={href}
     className={cn(
-      "flex items-center gap-3 py-2 transition-colors duration-150 ease-in-out rounded-lg p-2 px-4",
+      "flex items-center gap-3 rounded-lg px-4 py-2 transition-colors duration-150 ease-in-out",
       active
-        ? "bg-foreground/10 text-white"
-        : "text-zinc-400 hover:bg-foreground/20 hover:text-white active:bg-zinc-600 active:text-white"
+        ? "bg-foreground/10 text-foreground"
+        : "text-zinc-400 hover:bg-foreground/10 hover:text-foreground"
     )}
     title={text}
     target={target}
@@ -57,48 +59,78 @@ const SidebarItem = ({
   </Link>
 );
 
-type SectionProps = {
+const Section = ({
+  title,
+  children,
+}: {
   title?: string;
   children: React.ReactNode;
-};
+}) => (
+  <div className="mb-4">
+    {title && (
+      <h3 className="mb-1 whitespace-nowrap px-3 text-xs font-medium uppercase text-zinc-500 dark:text-neutral-400">
+        {title}
+      </h3>
+    )}
+    <div className="space-y-1">{children}</div>
+  </div>
+);
 
-const Section = ({ title, children }: SectionProps) => {
-  return (
-    <div className="mb-4">
-      {title && (
-        <h3 className="mb-1 px-3 text-xs font-medium uppercase whitespace-nowrap dark:text-neutral-400 text-zinc-900">
-          {title}
-        </h3>
-      )}
-      <div className="space-y-1">{children}</div>
-    </div>
-  );
-};
-
-export function Sidebar() {
+export function Sidebar({ userEmail }: { userEmail: string }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [supabase] = useState(() => createClient());
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
 
-  // Mobile check
+  const fetchConversations = useCallback(async () => {
+    const { data } = await supabase
+      .from("conversations")
+      .select("id, messages, created_at, deleted")
+      .order("created_at", { ascending: false });
+
+    setConversations(
+      (data ?? [])
+        .filter((c) => !c.deleted)
+        .map((c) => ({
+          id: c.id as string,
+          title: deriveTitle(parseMessages(c.messages)),
+        }))
+    );
+  }, [supabase]);
+
+  // Live updates (insert/update/delete) via Realtime — no polling.
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+    const channel = supabase
+      .channel("sidebar-conversations")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversations" },
+        () => fetchConversations()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
     };
+  }, [supabase, fetchConversations]);
 
+  // Initial load + refresh on navigation (also a safety net if Realtime drops an event).
+  useEffect(() => {
+    fetchConversations();
+  }, [pathname, fetchConversations]);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener("resize", checkMobile);
-
-    return () => {
-      window.removeEventListener("resize", checkMobile);
-    };
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   useEffect(() => {
-    if (isMobile) {
-      setMobileOpen(false);
-    }
+    if (isMobile) setMobileOpen(false);
   }, [pathname, isMobile]);
 
   useEffect(() => {
@@ -109,15 +141,31 @@ export function Sidebar() {
     };
   }, [collapsed, isMobile]);
 
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    const { error } = await supabase
+      .from("conversations")
+      .update({ deleted: true })
+      .eq("id", id);
+    if (error) {
+      fetchConversations();
+      toast({ variant: "destructive", title: "Couldn't delete chat" });
+      return;
+    }
+    if (pathname === `/chat/${id}`) router.push("/");
+  };
+
+  const initials = (userEmail || "?").charAt(0).toUpperCase();
+
   return (
     <>
       {!isMobile && (
         <button
           onClick={() => setCollapsed(!collapsed)}
           style={{ left: collapsed ? 8 : "calc(var(--sidebar-width) + 6px)" }}
-          className={cn(
-            "fixed top-5 z-[100] flex h-8 w-8 items-center justify-center rounded-r-md text-white transition-all duration-300 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
-          )}
+          className="fixed top-5 z-[100] flex h-8 w-8 items-center justify-center rounded-r-md text-foreground transition-all duration-300 ease-in-out hover:text-zinc-400 active:text-zinc-500"
         >
           {!collapsed ? (
             <PanelRightOpen className="h-6 w-6" />
@@ -130,7 +178,7 @@ export function Sidebar() {
       {isMobile && (
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="fixed left-4 top-4 z-[100] rounded-md p-2 text-white transition-colors duration-150 ease-in-out hover:text-zinc-400 active:text-zinc-500 active:scale-95"
+          className="fixed left-4 top-4 z-[100] rounded-md p-2 text-foreground transition-colors duration-150 ease-in-out hover:text-zinc-400 active:text-zinc-500"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -138,17 +186,17 @@ export function Sidebar() {
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-background text-foreground transition-all duration-30 ",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-background text-foreground transition-all duration-300",
           collapsed ? "w-0 overflow-hidden" : "w-60",
           !collapsed && "border-r border-foreground/10",
-          isMobile && !mobileOpen && "transform -translate-x-full",
-          isMobile && mobileOpen && "transform translate-x-0 shadow-lg"
+          isMobile && !mobileOpen && "-translate-x-full transform",
+          isMobile && mobileOpen && "translate-x-0 transform shadow-lg"
         )}
       >
-        <div className="flex items-center justify-center pt-5 border-b border-b-foreground/10 p-4">
+        <div className="flex items-center justify-center border-b border-b-foreground/10 p-4 pt-5">
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
-          <h1 className="ml-2 font-semibold whitespace-nowrap overflow-hidden text-ellipsis">
-            UT Registration GPT
+          <h1 className="ml-2 overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
+            Forty
           </h1>
         </div>
 
@@ -156,29 +204,44 @@ export function Sidebar() {
           <Section>
             <SidebarItem
               href="/"
-              icon={<Home className="h-4 w-4" />}
-              text="New Chat"
+              icon={<SquarePen className="h-4 w-4" />}
+              text="New chat"
               active={pathname === "/"}
             />
           </Section>
 
-          <Section title="Recent Conversations">
-            {recentConversations
-              .slice()
-              .sort(
-                (a, b) =>
-                  new Date(b.timestamp).getTime() -
-                  new Date(a.timestamp).getTime()
-              )
-              .map((convo) => (
-                <SidebarItem
-                  key={convo.id}
-                  href={`/chat/${convo.id}`}
-                  icon={<MessageSquare className="h-4 w-4" />}
-                  text={convo.title}
-                  active={pathname === `/chat/${convo.id}`}
-                />
-              ))}
+          <Section title="Recents">
+            {conversations.length === 0 ? (
+              <p className="px-4 py-1 text-sm text-zinc-500">No chats yet</p>
+            ) : (
+              conversations.map((c) => {
+                const active = pathname === `/chat/${c.id}`;
+                return (
+                  <div key={c.id} className="group relative">
+                    <Link
+                      href={`/chat/${c.id}`}
+                      title={c.title}
+                      className={cn(
+                        "block truncate rounded-lg py-2 pl-4 pr-9 text-sm transition-colors duration-150",
+                        active
+                          ? "bg-foreground/10 text-foreground"
+                          : "text-zinc-400 hover:bg-foreground/10 hover:text-foreground"
+                      )}
+                    >
+                      {c.title}
+                    </Link>
+                    <button
+                      onClick={(e) => handleDelete(c.id, e)}
+                      title="Delete chat"
+                      aria-label="Delete chat"
+                      className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-zinc-400 hover:text-foreground group-hover:block"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
           </Section>
 
           <Section title="Resources">
@@ -209,8 +272,28 @@ export function Sidebar() {
           </Section>
         </div>
 
-        <div className="border-t border-zinc-900 p-2">
-          {/* bottom of sidebar; could put settings? */}
+        <div className="flex items-center gap-1 border-t border-foreground/10 p-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex flex-1 items-center gap-2 overflow-hidden rounded-lg p-2 text-left transition-colors hover:bg-foreground/10">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <span className="truncate text-sm">{userEmail}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
+                {userEmail}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => signOutAction()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ThemeSwitcher />
         </div>
       </div>
 

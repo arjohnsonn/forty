@@ -12,7 +12,7 @@ const NavbarHeader = (props: Props) => {
     !isHomePage && (
       <div className="w-full flex justify-between items-center p-3 px-5">
         <div className="flex items-center space-x-2">
-          <h1 className="text-xl font-bold">UT Registration GPT</h1>
+          <h1 className="text-xl font-bold">Forty</h1>
         </div>
       </div>
     )

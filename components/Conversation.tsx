@@ -1,226 +1,214 @@
 "use client";
 
-import React from "react";
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { TextareaExpand } from "@/components/ui/textarea";
-import { Loader2, Check, X, ArrowUp } from "lucide-react";
+import { Loader2, ArrowUp, Copy, RefreshCw, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useToast } from "@/components/hooks/use-toast";
 import { useChat } from "@ai-sdk/react";
+import type { Message } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
 import CourseChips from "@/components/CourseChips";
-
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
+import { messageText } from "@/lib/conversations";
+import { cn } from "@/lib/utils";
 
 type ConversationProps = {
-  title: string;
-  initialQuery: string;
+  chatId: string;
+  initialMessages: Message[];
+  /** First user message awaiting a response (new chat or a prior unanswered turn). */
+  pendingQuery?: string;
 };
 
-const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
+const Conversation: React.FC<ConversationProps> = ({
+  chatId,
+  initialMessages,
+  pendingQuery,
+}) => {
   const { toast } = useToast();
+  const [supabase] = useState(() => createClient());
 
-  const supabase = createClient();
-  const [token, setToken] = useState<string>(
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
-
-  const { messages, input, handleInputChange, handleSubmit, status, append } =
+  const { messages, input, handleInputChange, handleSubmit, status, append, reload } =
     useChat({
-      // id,
-      // initialMessages,
+      id: chatId,
       api: process.env.NEXT_PUBLIC_CHAT_URL,
+      initialMessages,
+      // The Worker reads `chatId` to persist the conversation on finish.
+      body: { chatId },
       sendExtraMessageFields: true,
       onError: (response) => {
-        // Default toast error messages
         let errorName = "Error";
         let errorMessage = "Something went wrong. Please try again.";
-
         try {
-          // Attempt to parse the error message in standard format
           const {
             error: { name, message },
           } = JSON.parse(response.message);
-
           errorName = name;
           errorMessage = message;
-        } catch (e) {
-          // If parsing fails, use the default error message
+        } catch {
           errorMessage = response.message;
         }
-
-        toast({
-          variant: "destructive",
-          title: errorName,
-          description: errorMessage,
-        });
+        toast({ variant: "destructive", title: errorName, description: errorMessage });
       },
     });
 
-  const [rmpEnabled, setRmpEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pendingSent = useRef(false);
+  const instanceId = useRef(Math.random().toString(36).slice(2, 7));
+  const prevCount = useRef(0);
+  const busy = status === "submitted" || status === "streaming";
 
-  const initialSent = useRef(false);
-
+  // [DupMsgDebug] Detect duplicate Conversation instances (StrictMode/remount).
   useEffect(() => {
-    // StrictMode double-invokes effects in dev — guard so the initial query is sent only once.
-    if (initialQuery && !initialSent.current) {
-      initialSent.current = true;
-      const getToken = async () => {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const authToken = session?.access_token ?? token;
-        if (session) setToken(session.access_token);
-
-        const userMessage: Message = {
-          id: Date.now().toString(),
-          role: "user",
-          content: initialQuery,
-        };
-
-        append(userMessage, {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-        });
-      };
-
-      getToken();
-    }
+    console.log(
+      `[DupMsgDebug] MOUNT inst=${instanceId.current} chatId=${chatId} initialMessages=${initialMessages.length} pendingQuery=${
+        pendingQuery ? JSON.stringify(pendingQuery.slice(0, 40)) : "none"
+      }`
+    );
+    return () =>
+      console.log(`[DupMsgDebug] UNMOUNT inst=${instanceId.current} chatId=${chatId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const authHeaders = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token =
+      session?.access_token ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+    return { Authorization: `Bearer ${token}` };
+  }, [supabase]);
+
+  // Send the unanswered first message exactly once (guards StrictMode double-mount).
   useEffect(() => {
+    console.log(
+      `[DupMsgDebug] pending effect run inst=${instanceId.current} hasPending=${!!pendingQuery} alreadySent=${pendingSent.current}`
+    );
+    if (!pendingQuery || pendingSent.current) return;
+    pendingSent.current = true;
+    (async () => {
+      const headers = await authHeaders();
+      console.log(`[DupMsgDebug] pending APPEND firing inst=${instanceId.current}`);
+      append({ role: "user", content: pendingQuery }, { headers });
+    })();
+  }, [pendingQuery, append, authHeaders]);
+
+  useEffect(() => {
+    if (messages.length !== prevCount.current) {
+      prevCount.current = messages.length;
+      console.log(
+        `[DupMsgDebug] messages count=${messages.length} roles=[${messages
+          .map((m) => m.role)
+          .join(",")}] inst=${instanceId.current}`
+      );
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
-    const textarea = document.querySelector("textarea");
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = `${textarea.scrollHeight}px`;
+    const ta = textareaRef.current;
+    if (ta) {
+      ta.style.height = "auto";
+      ta.style.height = `${ta.scrollHeight}px`;
     }
   }, [input]);
 
-  const handleSubmitToken = async (e?: React.FormEvent) => {
+  const onSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!input.trim() || busy) return;
+    handleSubmit(undefined, { headers: await authHeaders() });
+  };
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+  const onRegenerate = async () => {
+    if (busy) return;
+    reload({ headers: await authHeaders() });
+  };
 
-    const authToken = session?.access_token ?? token;
-    if (session) setToken(session.access_token);
-
-    handleSubmit(undefined, {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
+  const onCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied to clipboard" });
+    } catch {
+      toast({ variant: "destructive", title: "Couldn't copy" });
+    }
   };
 
   return (
-    <div className="flex h-full w-full flex-col">
-      {/* Sticky title */}
-      <header className="shrink-0 border-b border-border/60 bg-background">
-        <div className="mx-auto w-full max-w-3xl px-4 py-3">
-          <h1 className="text-lg font-semibold">{title}</h1>
-        </div>
-      </header>
-
-      {/* Scrollable messages */}
+    <div className="flex min-h-0 w-full flex-1 flex-col">
       <div
-        className="flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto"
         style={{ scrollbarGutter: "stable both-edges" }}
       >
         <div className="mx-auto w-full max-w-3xl px-4 py-6">
-          {messages.length === 0 ? (
-            <div className="flex min-h-[50vh] items-center justify-center text-center text-muted-foreground">
-              <div>
-                <p>No messages yet</p>
-                <p className="text-sm">Start a conversation by typing a message below</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {messages.map((message) => {
-                const text = message.parts
-                  .filter((part) => part.type === "text")
-                  .map((part) => part.text)
-                  .join("");
-                return message.role === "user" ? (
+          <div className="space-y-6">
+            {messages.map((message, idx) => {
+              const text = messageText(message);
+              const isLast = idx === messages.length - 1;
+
+              if (message.role === "user") {
+                return (
                   <div key={message.id} className="flex justify-end">
-                    <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-muted px-4 py-2.5">
+                    <div className="max-w-[80%] whitespace-pre-wrap rounded-3xl bg-muted px-4 py-2.5 text-sm">
                       {text}
                     </div>
                   </div>
-                ) : (
-                  <div
-                    key={message.id}
-                    className="prose max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted"
-                  >
+                );
+              }
+
+              return (
+                <div key={message.id} className="space-y-2">
+                  <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
                     <CourseChips annotations={message.annotations} />
                   </div>
-                );
-              })}
-
-              {status === "submitted" && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Thinking...
+                  {!(isLast && status === "streaming") && (
+                    <MessageActions
+                      onCopy={() => onCopy(text)}
+                      onRegenerate={isLast && !busy ? onRegenerate : undefined}
+                    />
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
+
+            {status === "submitted" && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Thinking...
+              </div>
+            )}
+          </div>
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Pinned input bar */}
       <div className="shrink-0 bg-background">
-        <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-2">
-          <form onSubmit={handleSubmitToken}>
-            <div className="flex flex-col rounded-2xl border bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring">
+        <div className="mx-auto w-full max-w-3xl px-4 pb-3 pt-2">
+          <form onSubmit={onSubmit}>
+            <div className="flex flex-col rounded-3xl border bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring">
               <TextareaExpand
+                ref={textareaRef}
                 className="max-h-60 w-full resize-none overflow-y-auto border-0 bg-transparent px-4 pt-3 focus-visible:ring-0"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    if (input.trim())
-                      handleSubmitToken(e as unknown as React.FormEvent);
+                    onSubmit(e as unknown as React.FormEvent);
                   }
                 }}
-                placeholder="Message UT Registration GPT…"
-                disabled={status === "submitted"}
+                placeholder="Message Forty…"
               />
-              <div className="flex items-center justify-between px-3 pb-3">
-                <Button
-                  className="h-9 gap-2 rounded-full px-3"
-                  variant="outline"
-                  type="button"
-                  onClick={() => setRmpEnabled(!rmpEnabled)}
-                >
-                  {rmpEnabled ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <X className="h-4 w-4 text-red-500" />
-                  )}
-                  <span>RMP</span>
-                </Button>
+              <div className="flex items-center justify-end px-3 pb-3">
                 <Button
                   className="h-9 w-9 rounded-full bg-black p-0 disabled:opacity-50 dark:bg-white"
                   variant="outline"
                   type="submit"
-                  disabled={status === "submitted" || !input.trim()}
+                  disabled={busy || !input.trim()}
                 >
-                  {status === "submitted" ? (
+                  {busy ? (
                     <Loader2 className="h-5 w-5 animate-spin text-white dark:text-black" />
                   ) : (
                     <ArrowUp className="h-5 w-5 text-white dark:text-black" />
@@ -229,10 +217,77 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
               </div>
             </div>
           </form>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Forty can make mistakes. Verify important details.
+          </p>
         </div>
       </div>
     </div>
   );
 };
+
+function MessageActions({
+  onCopy,
+  onRegenerate,
+}: {
+  onCopy: () => void;
+  onRegenerate?: () => void;
+}) {
+  const [vote, setVote] = useState<"up" | "down" | null>(null);
+  return (
+    <div className="flex items-center gap-0.5 text-muted-foreground">
+      <ActionButton label="Copy" onClick={onCopy}>
+        <Copy className="h-4 w-4" />
+      </ActionButton>
+      <ActionButton
+        label="Good response"
+        active={vote === "up"}
+        onClick={() => setVote((v) => (v === "up" ? null : "up"))}
+      >
+        <ThumbsUp className="h-4 w-4" />
+      </ActionButton>
+      <ActionButton
+        label="Bad response"
+        active={vote === "down"}
+        onClick={() => setVote((v) => (v === "down" ? null : "down"))}
+      >
+        <ThumbsDown className="h-4 w-4" />
+      </ActionButton>
+      {onRegenerate && (
+        <ActionButton label="Regenerate" onClick={onRegenerate}>
+          <RefreshCw className="h-4 w-4" />
+        </ActionButton>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({
+  children,
+  label,
+  onClick,
+  active,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-md p-1.5 transition-colors hover:bg-muted hover:text-foreground",
+        active && "text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default Conversation;

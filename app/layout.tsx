@@ -1,4 +1,3 @@
-import HeaderAuth from "@/components/header-auth";
 import { Poppins } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -13,7 +12,7 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "UT Registration GPT",
+  title: "Forty",
   description: "Find your perfect UT schedule with AI",
 };
 
@@ -34,7 +33,11 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   return (
-    <html lang="en" className={poppinSans.className} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${poppinSans.className} bg-background`}
+      suppressHydrationWarning
+    >
       <body className="bg-background text-foreground">
         <ThemeProvider
           attribute="class"
@@ -42,17 +45,18 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {user && <Sidebar />}
-
-          <Navbar />
+          {user ? <Sidebar userEmail={user.email ?? ""} /> : <Navbar />}
 
           <main
-            style={{ marginTop: "4rem", marginLeft: "var(--sidebar-width)" }}
-            className="transition-all duration-300 flex flex-col h-[calc(100vh-4rem)]"
+            style={{
+              marginTop: user ? 0 : "4rem",
+              marginLeft: "var(--sidebar-width, 0px)",
+            }}
+            className={`flex flex-col bg-background transition-all duration-300 ${
+              user ? "h-svh" : "h-[calc(100svh-4rem)]"
+            }`}
           >
-            <div className="w-full flex flex-col flex-1">
-              <div className="flex flex-col flex-1">{children}</div>
-            </div>
+            {children}
           </main>
           <Toaster />
         </ThemeProvider>
