@@ -54,8 +54,9 @@ type Props = {
 
 const NewConvo = ({ onSubmit }: Props) => {
   const [rmpEnabled, setRmpEnabled] = useState(true);
-  const [greeting, setGreeting] = useState("");
-  const [parts, setParts] = useState<string[]>([]);
+  // Deterministic seed so text shows on first paint; randomized after mount.
+  const [greeting, setGreeting] = useState(randomGreetings[0]);
+  const [parts, setParts] = useState<string[]>(randomGreetings[0].split("*"));
 
   useEffect(() => {
     const gr =
