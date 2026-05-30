@@ -1,0 +1,11 @@
+# Copy to .dev.vars (gitignored) for `wrangler dev`, and set the same names in prod via
+# `wrangler secret put <NAME>`.
+SUPABASE_URL=<url>
+SUPABASE_ANON_KEY=sb_publishable_xxx
+GOOGLE_GENERATIVE_AI_API_KEY=xxx
+
+# Comma-separated allowed origins for CORS (your site + localhost). Empty = allow all.
+ALLOWED_ORIGINS=https://utrgpt.vercel.app,http://localhost:3000
+
+# Cosine threshold for vector match (0..1). Lower = more permissive.
+MATCH_THRESHOLD=0.5

@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "utrgpt-chat",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // Native rate limiter: 10 requests / 60s per key (guest IP), period must be 10 or 60
+  "ratelimits": [
+    {
+      "name": "GUEST_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://utrgpt.vercel.app,http://localhost:3000",
+    "MATCH_THRESHOLD": "0.5",
+  },
+}
