@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
 import { ToastAction } from "./ui/toast";
+import CourseChips from "@/components/CourseChips";
 
 type Message = {
   id: string;
@@ -35,7 +36,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
     useChat({
       // id,
       // initialMessages,
-      api: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/chat`,
+      api: process.env.NEXT_PUBLIC_CHAT_URL,
       sendExtraMessageFields: true,
       onError: (response) => {
         // Default toast error messages
@@ -66,13 +67,17 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
   const [rmpEnabled, setRmpEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const initialSent = useRef(false);
+
   useEffect(() => {
-    // have state to prevent double rerender
-    if (initialQuery) {
+    // StrictMode double-invokes effects in dev — guard so the initial query is sent only once.
+    if (initialQuery && !initialSent.current) {
+      initialSent.current = true;
       const getToken = async () => {
         const {
           data: { session },
         } = await supabase.auth.getSession();
+        const authToken = session?.access_token ?? token;
         if (session) setToken(session.access_token);
 
         const userMessage: Message = {
@@ -83,7 +88,7 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
 
         append(userMessage, {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${authToken}`,
           },
         });
       };
@@ -111,10 +116,11 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
       data: { session },
     } = await supabase.auth.getSession();
 
+    const authToken = session?.access_token ?? token;
     if (session) setToken(session.access_token);
 
     handleSubmit(undefined, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${authToken}` },
     });
   };
 
@@ -168,6 +174,9 @@ const Conversation: React.FC<ConversationProps> = ({ title, initialQuery }) => {
                         </ReactMarkdown>
                       );
                     })()}
+                    {message.role === "assistant" && (
+                      <CourseChips annotations={message.annotations} />
+                    )}
                   </div>
                 </div>
               </div>
