@@ -16,62 +16,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, ChevronUp, ChevronRight, ExternalLink, Star, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  formatName,
+  courseCode,
+  titleCase,
+  courseMeta,
+  meetingsOf,
+  toScheduleSection,
+  type RetrievedSection,
+  type CourseSection,
+  type SemesterGrades,
+  type ProfessorRating,
+} from "@/lib/courses";
+import AddToSchedule from "@/components/AddToSchedule";
 
-export type SemesterGrades = { semester: string; grades: Record<string, number> };
-
-export type ProfessorRating = {
-  instructor: string;
-  rmpLegacyId: number;
-  rmpRating: number | null;
-  rmpDifficulty: number | null;
-  rmpWouldTakeAgain: number | null;
-  rmpNumRatings: number | null;
-  rmpDepartment: string | null;
-
-  rmpCourse?: {
-    code: string;
-    rating: number;
-    difficulty: number;
-    wouldTakeAgain: number | null;
-    numRatings: number;
-  } | null;
-};
-
-/** One offered section of a course (the chip collapses a course's sections; the dialog lists them). */
-export type CourseSection = {
-  section_id: number;
-  instructors: string[];
-  instruction_mode: string | null;
-  register_url: string | null;
-  schedule_days: string[] | null;
-  schedule_hours: string[] | null;
-  schedule_location: string[] | null;
-};
-
-/** A section as returned by the `match_sections_detailed` RPC and attached to the assistant message. */
-export type RetrievedSection = {
-  section_id: number;
-  course_header: string;
-  instructors: string[];
-  instruction_mode: string | null;
-  register_url: string | null;
-  schedule_days: string[] | null;
-  schedule_hours: string[] | null;
-  schedule_location: string[] | null;
-  core_curriculum: string[] | null;
-  grade_data: Record<string, number> | null;
-  instructor_grades: Array<{ instructor: string } & Record<string, number>> | null;
-  semester_grades: SemesterGrades[] | null;
-  evaluations: Array<{
-    instructor: string;
-    courseRating: number;
-    instructorRating: number;
-    responseRate: number;
-    cesLink: string;
-  }> | null;
-  professor_ratings?: ProfessorRating[] | null;
-  course_sections?: CourseSection[] | null;
-};
+export type { RetrievedSection, CourseSection } from "@/lib/courses";
 
 const BUCKETS = ["A", "B", "C", "D", "F", "Other"] as const;
 const BUCKET_COLOR: Record<string, string> = {
@@ -84,51 +43,12 @@ const BUCKET_COLOR: Record<string, string> = {
 };
 
 /** Pull the course sections out of a message's annotations (written by the Worker). */
-function extractCourses(annotations?: unknown[]): RetrievedSection[] {
+export function extractCourses(annotations?: unknown[]): RetrievedSection[] {
   const a = (annotations ?? []).find(
     (x): x is { type: string; sections: RetrievedSection[] } =>
       !!x && typeof x === "object" && (x as { type?: string }).type === "courses"
   );
   return a?.sections ?? [];
-}
-
-// "LEWIS, CHARLTON N" -> "Charlton N Lewis" 
-function formatName(raw: string): string {
-  const parts = raw.split(",");
-  const last = (parts[0] ?? "").trim();
-  const rest = parts.slice(1).join(",").trim();
-  const ordered = rest ? `${rest} ${last}` : last;
-  return ordered
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("-"))
-    .join(" ");
-}
-
-// "C S 303E ELEMS OF COMPUTERS" -> "C S 303E"
-function courseCode(header: string): string {
-  const m = header.match(/^(.+?\s\d{1,3}[A-Z]*)\s/);
-  return m?.[1] ?? header;
-}
-
-// "10:00 a.m.-11:00 a.m." -> "10:00 AM – 11:00 AM"
-function formatHours(raw: string): string {
-  return raw
-    .replace(/a\.m\./gi, "AM")
-    .replace(/p\.m\./gi, "PM")
-    .replace(/\s*-\s*/g, " – ")
-    .trim();
-}
-
-// "SOFTWARE ENGINEERING" -> "Software Engineering"
-function titleCase(s: string): string {
-  return s
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
 
 function SectionLabel({ children }: { children: string }) {
@@ -241,33 +161,14 @@ function CourseGrades({
   );
 }
 
-// UT course numbers encode credits + level: 1st digit = semester credit hours; 2nd–3rd digits =
-// rank (01–19 lower-division, 20–79 upper-division, 80–99 graduate). e.g. "C S 329E" -> 3 cr, upper.
-function courseMeta(code: string): { credits: number; level: string } | null {
-  const m = code.match(/(\d{3})[A-Z]*$/);
-  if (!m) return null;
-  const digits = m[1]!;
-  const rank = Number(digits.slice(1));
-  const level = rank <= 19 ? "Lower-division" : rank <= 79 ? "Upper-division" : "Graduate";
-  return { credits: Number(digits[0]), level };
-}
-
-/** Meeting rows ("MWF" / hours / location) from a section's parallel schedule arrays. */
-function meetingsOf(sec: CourseSection) {
-  return (sec.schedule_days ?? []).map((d, i) => ({
-    days: d.trim(),
-    hours: formatHours(sec.schedule_hours?.[i] ?? ""),
-    location: (sec.schedule_location?.[i] ?? "").trim(),
-  }));
-}
-
 function RegisterLink({ sec }: { sec: CourseSection }) {
-  if (!sec.register_url) return <span className="text-xs text-muted-foreground">#{sec.section_id}</span>;
+  if (!sec.register_url)
+    return <span className="text-xs tabular-nums text-muted-foreground">#{sec.section_id}</span>;
   return (
     <button
       type="button"
       onClick={() => window.open(sec.register_url!, "_blank", "noopener,noreferrer")}
-      className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      className="inline-flex shrink-0 items-center gap-1 text-xs tabular-nums text-muted-foreground transition-colors hover:text-foreground"
     >
       #{sec.section_id}
       <ExternalLink className="h-3 w-3" />
@@ -294,7 +195,7 @@ function Meetings({ sec }: { sec: CourseSection }) {
 }
 
 /** A single-section course: the original "Taught by … / Meets" layout. */
-function SingleSection({ sec }: { sec: CourseSection }) {
+function SingleSection({ sec, s }: { sec: CourseSection; s: RetrievedSection }) {
   const ins = sec.instructors.map(formatName).filter(Boolean);
   return (
     <section className="space-y-1.5">
@@ -309,14 +210,17 @@ function SingleSection({ sec }: { sec: CourseSection }) {
         <div className="min-w-0 space-y-1">
           <Meetings sec={sec} />
         </div>
-        <RegisterLink sec={sec} />
+        <div className="flex shrink-0 items-center gap-2">
+          <AddToSchedule section={toScheduleSection(s, sec)} />
+          <RegisterLink sec={sec} />
+        </div>
       </div>
     </section>
   );
 }
 
 /** Sections grouped by professor, each group collapsible (collapsed by default). */
-function SectionsByProfessor({ sections }: { sections: CourseSection[] }) {
+function SectionsByProfessor({ sections, s }: { sections: CourseSection[]; s: RetrievedSection }) {
   const groups = new Map<string, CourseSection[]>();
   for (const sec of sections) {
     const prof = sec.instructors.map(formatName).filter(Boolean).join(", ") || "Instructor TBA";
@@ -363,7 +267,10 @@ function SectionsByProfessor({ sections }: { sections: CourseSection[] }) {
                         <div className="min-w-0 space-y-1">
                           <Meetings sec={sec} />
                         </div>
-                        <RegisterLink sec={sec} />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <AddToSchedule section={toScheduleSection(s, sec)} />
+                          <RegisterLink sec={sec} />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -420,6 +327,31 @@ function RmpRow({ rmp, onDetails }: { rmp: ProfessorRating; onDetails: () => voi
         )}
       </div>
     </button>
+  );
+}
+
+// Course description: lead paragraph shown, the rest behind a "View more" toggle.
+function CourseDescription({ text }: { text: string }) {
+  const paras = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? paras : paras.slice(0, 1);
+  return (
+    <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+      {shown.map((p, i) => (
+        <p key={i} className="whitespace-pre-line">
+          {p}
+        </p>
+      ))}
+      {paras.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="cursor-pointer text-xs font-medium text-texas hover:underline"
+        >
+          {expanded ? "View less" : "View more"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -481,13 +413,15 @@ function CourseDetail({ s, onOpenRmp }: { s: RetrievedSection; onOpenRmp: (prof:
         </div>
       )}
 
+      {s.description && <CourseDescription text={s.description} />}
+
       {multi ? (
         <section className="space-y-2">
           <SectionLabel>{`${sections.length} sections`}</SectionLabel>
-          <SectionsByProfessor sections={sections} />
+          <SectionsByProfessor sections={sections} s={s} />
         </section>
       ) : (
-        <SingleSection sec={sections[0]!} />
+        <SingleSection sec={sections[0]!} s={s} />
       )}
 
       <CourseGrades aggregate={s.grade_data} semesters={s.semester_grades ?? []} />
@@ -565,10 +499,78 @@ function courseProfessors(s: RetrievedSection): string[] {
   return Array.from(set);
 }
 
+// Shared course-detail dialog (card + RMP panel); renders nothing until `section` is set.
+export function CourseDialog({
+  section,
+  onClose,
+}: {
+  section: RetrievedSection | null;
+  onClose: () => void;
+}) {
+  const [rmpProf, setRmpProf] = useState<RmpPanelProf | null>(null);
+
+  return (
+    <Dialog
+      open={!!section}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+          setRmpProf(null);
+        }
+      }}
+    >
+      <DialogPortal>
+        <DialogOverlay />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <DialogPrimitive.Content
+            aria-describedby={undefined}
+            className="relative flex items-start gap-3 outline-none ring-0 duration-200 focus:outline-none focus-visible:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          >
+            {/* Course card */}
+            <div className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
+              <div className="max-h-[85vh] overflow-y-auto p-6">
+                {section && (
+                  <CourseDetail
+                    s={section}
+                    onOpenRmp={(prof) =>
+                      setRmpProf((cur) => (cur?.legacyId === prof.legacyId ? null : prof))
+                    }
+                  />
+                )}
+              </div>
+              <DialogPrimitive.Close className="absolute right-4 top-4 z-10 cursor-pointer rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            </div>
+
+            {/* RateMyProfessors detail — slides out beside the card (desktop) */}
+            <AnimatePresence>
+              {rmpProf && (
+                <motion.aside
+                  key="rmp-panel"
+                  initial={{ opacity: 0, width: 0, x: -12 }}
+                  animate={{ opacity: 1, width: 340, x: 0 }}
+                  exit={{ opacity: 0, width: 0, x: -12 }}
+                  transition={{ duration: 0.28, ease: "easeInOut" }}
+                  className="hidden overflow-hidden sm:block"
+                >
+                  <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
+                    <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpProf(null)} />
+                  </div>
+                </motion.aside>
+              )}
+            </AnimatePresence>
+          </DialogPrimitive.Content>
+        </div>
+      </DialogPortal>
+    </Dialog>
+  );
+}
+
 export default function CourseChips({ annotations }: { annotations?: unknown[] }) {
   const sections = extractCourses(annotations);
   const [selected, setSelected] = useState<RetrievedSection | null>(null);
-  const [rmpProf, setRmpProf] = useState<RmpPanelProf | null>(null);
   if (!sections.length) return null;
 
   return (
@@ -582,7 +584,7 @@ export default function CourseChips({ annotations }: { annotations?: unknown[] }
               key={s.section_id}
               type="button"
               onClick={() => setSelected(s)}
-              className="rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:border-texas/60 hover:text-texas"
+              className="cursor-pointer rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:border-texas/60 hover:text-texas"
             >
               <span className="font-medium">{courseCode(s.course_header)}</span>
               {label && <span className="text-muted-foreground"> {label}</span>}
@@ -591,61 +593,7 @@ export default function CourseChips({ annotations }: { annotations?: unknown[] }
         })}
       </div>
 
-      <Dialog
-        open={!!selected}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelected(null);
-            setRmpProf(null);
-          }
-        }}
-      >
-        <DialogPortal>
-          <DialogOverlay />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <DialogPrimitive.Content
-              aria-describedby={undefined}
-              className="relative flex items-start gap-3 outline-none ring-0 duration-200 focus:outline-none focus-visible:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-            >
-              {/* Course card */}
-              <div className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
-                <div className="max-h-[85vh] overflow-y-auto p-6">
-                  {selected && (
-                    <CourseDetail
-                      s={selected}
-                      onOpenRmp={(prof) =>
-                        setRmpProf((cur) => (cur?.legacyId === prof.legacyId ? null : prof))
-                      }
-                    />
-                  )}
-                </div>
-                <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-                  <X className="h-4 w-4" />
-                  <span className="sr-only">Close</span>
-                </DialogPrimitive.Close>
-              </div>
-
-              {/* RateMyProfessors detail — slides out beside the card (desktop) */}
-              <AnimatePresence>
-                {rmpProf && (
-                  <motion.aside
-                    key="rmp-panel"
-                    initial={{ opacity: 0, width: 0, x: -12 }}
-                    animate={{ opacity: 1, width: 340, x: 0 }}
-                    exit={{ opacity: 0, width: 0, x: -12 }}
-                    transition={{ duration: 0.28, ease: "easeInOut" }}
-                    className="hidden overflow-hidden sm:block"
-                  >
-                    <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
-                      <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpProf(null)} />
-                    </div>
-                  </motion.aside>
-                )}
-              </AnimatePresence>
-            </DialogPrimitive.Content>
-          </div>
-        </DialogPortal>
-      </Dialog>
+      <CourseDialog section={selected} onClose={() => setSelected(null)} />
     </>
   );
 }

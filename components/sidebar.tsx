@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Calendar,
+  CalendarDays,
   GraduationCap,
   SquarePen,
   Menu,
@@ -253,6 +254,12 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
               // Reset the landing UI even when the router already thinks it's on "/" (after an
               // in-place chat start, where the URL was changed via history.replaceState).
               onClick={() => window.dispatchEvent(new Event("forty:new-chat"))}
+            />
+            <SidebarItem
+              href="/calendar"
+              icon={<CalendarDays className="h-4 w-4" />}
+              text="Calendar"
+              active={pathname === "/calendar"}
             />
           </Section>
 

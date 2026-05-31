@@ -61,6 +61,39 @@ export type Database = {
         }
         Relationships: []
       }
+      schedules: {
+        Row: {
+          blocks: Json
+          created_at: string
+          id: string
+          name: string
+          position: number
+          sections: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blocks?: Json
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          sections?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          blocks?: Json
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          sections?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       courses: {
         Row: {
           course_header: string
@@ -287,6 +320,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_section_to_schedule: {
+        Args: { p_id: string; p_section: Json }
+        Returns: undefined
+      }
+      remove_section_from_schedule: {
+        Args: { p_id: string; p_section_id: number }
+        Returns: undefined
+      }
       match_sections: {
         Args: { embedding: string; match_threshold: number }
         Returns: {

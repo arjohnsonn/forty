@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TextareaExpand } from "@/components/ui/textarea";
@@ -26,6 +26,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
 import CourseChips from "@/components/CourseChips";
+import { buildCourseTime, rehypeCourseTime, makeCourseTimeComponents } from "@/lib/rehype-course-time";
 import { messageText, deriveTitle } from "@/lib/conversations";
 
 type ConversationProps = {
@@ -75,8 +76,7 @@ const Conversation: React.FC<ConversationProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingSent = useRef(false);
   const busy = status === "submitted" || status === "streaming";
-  // Keep "Thinking…" until the assistant message actually has text — annotations (course chips)
-  // arrive before the first token, so status flips to "streaming" seconds before words appear.
+  // Keep "Thinking…" until the assistant message has text (annotations arrive before the first token).
   const lastMessage = messages[messages.length - 1];
   const awaitingText =
     busy && (lastMessage?.role !== "assistant" || messageText(lastMessage).trim() === "");
@@ -223,18 +223,14 @@ const Conversation: React.FC<ConversationProps> = ({
               }
 
               return (
-                <div key={message.id} className="space-y-2">
-                  <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
-                    {text.trim().length > 0 && <CourseChips annotations={message.annotations} />}
-                  </div>
-                  {!(isLast && status === "streaming") && (
-                    <MessageActions
-                      onCopy={() => onCopy(text)}
-                      onRegenerate={isLast && !busy ? onRegenerate : undefined}
-                    />
-                  )}
-                </div>
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  streaming={isLast && status === "streaming"}
+                  showActions={!(isLast && status === "streaming")}
+                  onCopy={() => onCopy(text)}
+                  onRegenerate={isLast && !busy ? onRegenerate : undefined}
+                />
               );
             })}
 
@@ -336,6 +332,49 @@ const Conversation: React.FC<ConversationProps> = ({
     </div>
   );
 };
+
+type MdRehypePlugins = React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+
+function AssistantMessage({
+  message,
+  streaming,
+  showActions,
+  onCopy,
+  onRegenerate,
+}: {
+  message: Message;
+  streaming: boolean;
+  showActions: boolean;
+  onCopy: () => void;
+  onRegenerate?: () => void;
+}) {
+  const text = messageText(message);
+  const { matches, sectionByKey } = useMemo(
+    () => buildCourseTime(message.annotations),
+    [message.annotations]
+  );
+  // Defer the inline (+) until streaming finishes (avoids flicker + partial-time matches).
+  const components = useMemo(
+    () => (streaming ? undefined : makeCourseTimeComponents(sectionByKey)),
+    [streaming, sectionByKey]
+  );
+  const rehypePlugins = useMemo<MdRehypePlugins>(
+    () => (streaming ? [] : [[rehypeCourseTime, { matches }]]),
+    [streaming, matches]
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={components}>
+          {text}
+        </ReactMarkdown>
+        {text.trim().length > 0 && <CourseChips annotations={message.annotations} />}
+      </div>
+      {showActions && <MessageActions onCopy={onCopy} onRegenerate={onRegenerate} />}
+    </div>
+  );
+}
 
 function MessageActions({
   onCopy,

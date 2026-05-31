@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/sidebar";
 import { createClient } from "@/utils/supabase/server";
 import Navbar from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
+import { SchedulesProvider } from "@/lib/schedules";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -67,7 +68,7 @@ export default async function RootLayout({
               user ? "h-svh" : "h-[calc(100svh-4rem)]"
             }`}
           >
-            {children}
+            {user ? <SchedulesProvider>{children}</SchedulesProvider> : children}
           </main>
           <Toaster />
         </ThemeProvider>
