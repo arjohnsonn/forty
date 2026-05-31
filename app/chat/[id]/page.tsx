@@ -18,7 +18,7 @@ export default async function ChatPage({
 
   const { data: convo, error } = await supabase
     .from("conversations")
-    .select("id, messages, deleted")
+    .select("id, messages, deleted, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -37,6 +37,7 @@ export default async function ChatPage({
       chatId={id}
       initialMessages={initialMessages}
       pendingQuery={pendingQuery}
+      initialTitle={(convo.title as string | null) ?? undefined}
     />
   );
 }

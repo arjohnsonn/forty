@@ -84,14 +84,22 @@ const errorJson = (
 
 const SYSTEM_PROMPT =
   `You are a course-advising assistant for UT Austin's Fall 2026 registration. ` +
-  `Answer using only the "Sections" data provided in the conversation. Each section includes the course, ` +
+  `Answer using only the "Sections" data provided in the conversation. Each entry is one course; it may be ` +
+  `offered as several sections (course_sections, each with its own instructors, meeting times, and register ` +
+  `link) — list them when the user asks about times or which section to take. Each entry also includes the course, ` +
   `instructors, meeting schedule, instruction mode, the historical course-wide grade distribution (grade_data), ` +
-  `per-professor grade distributions (instructor_grades), and past course evaluations (evaluations, with ` +
+  `per-professor grade distributions (instructor_grades), the grade distribution broken down by semester ` +
+  `(semester_grades, an array of { semester, grades } from Fall 2020 onward — use it to describe trends over ` +
+  `time, e.g. whether a course has gotten harder), and past course evaluations (evaluations, with ` +
   `courseRating and instructorRating out of 5). Grade fields are counts of A/B/C/D/F/Other. ` +
   `Instructor names in the structured fields are "LAST, FIRST" (e.g. "LEWIS, CHARLTON N") while the summary ` +
   `prose uses "First Last" (e.g. "Charlton N Lewis") — treat them as the same person when matching a query. ` +
   `instructor_grades covers every instructor of a section, but evaluations may exist for only some of them; ` +
   `if a professor has no evaluation entry, cite only their grade distribution rather than inventing ratings. ` +
+  `Course numbers encode the course: the first digit is the semester credit-hour value (e.g. 3 = a 3-credit ` +
+  `course, 4 = a 4-credit course), and the second and third digits give the level — 01–19 is lower-division ` +
+  `(freshman-level), 20–79 is upper-division (sophomore–senior-level), and 80–99 is graduate-level. ` +
+  `Use this to answer questions about credit hours or course level (e.g. "C S 314" is a 3-credit upper-division course). ` +
   `Cite concrete grade percentages and ratings when relevant. Do not mention course enrollment status ` +
   `(open, closed, waitlisted) — it is not provided and changes over time. If the provided sections do not ` +
   `contain the answer, say so instead of guessing.`;
@@ -208,12 +216,14 @@ export default {
       const matchThreshold = env.MATCH_THRESHOLD
         ? Number(env.MATCH_THRESHOLD)
         : 0.5;
+      // Over-fetch, then keep one section per course — a course with several sections (same summary)
+      // would otherwise fill the results with duplicates and crowd out other courses.
       const { data: sections, error: matchError } = await supabase
         .rpc("match_sections_detailed", {
           embedding: JSON.stringify(embedding),
           match_threshold: matchThreshold,
         })
-        .limit(5);
+        .limit(25);
 
       if (matchError) {
         console.error(matchError);
@@ -225,12 +235,79 @@ export default {
         );
       }
 
-      // `status` (waitlisted/open/closed) is point-in-time and can't be updated
-      // live, so drop it before it reaches the model or the UI chips.
-      const cleanSections = (sections ?? []).map((s: Record<string, unknown>) => {
-        const { status, ...rest } = s;
-        return rest;
+      // Group by course code ("C S 378") so different sections — and different topics of one number
+      // (the many "C S 378" topics) — collapse to one course. The representative keeps a
+      // `course_sections` list (every section's times/instructor/register link) and merged
+      // per-professor grades + evaluations across the sections. `status` (waitlisted/open/closed) is
+      // point-in-time and can't be kept live, so it's dropped before reaching the model or UI.
+      const courseCodeOf = (header: string) =>
+        header.match(/^(.+?\s\d{1,3}[A-Z]*)(?:\s|$)/)?.[1] ?? header;
+      const MAX_COURSES = 6;
+      // Cosine-similarity margin below the top match. A specific-course question makes one course
+      // match far better than the rest, so the others fall outside the margin and get dropped.
+      const MATCH_MARGIN = 0.08;
+      const groups = new Map<string, Record<string, unknown>[]>();
+      const order: string[] = [];
+      for (const s of (sections ?? []) as Record<string, unknown>[]) {
+        const code = courseCodeOf(s.course_header as string);
+        if (!groups.has(code)) {
+          groups.set(code, []);
+          order.push(code);
+        }
+        groups.get(code)!.push(s);
+      }
+      const ranked = order.slice(0, MAX_COURSES).map((code) => {
+        const group = groups.get(code)!;
+        const { status: _status, similarity, ...rep } = group[0]!;
+        const igByInstructor = new Map<string, unknown>();
+        const evByKey = new Map<string, any>();
+        for (const g of group) {
+          for (const ig of (g.instructor_grades as any[]) ?? [])
+            if (!igByInstructor.has(ig.instructor)) igByInstructor.set(ig.instructor, ig);
+          for (const e of (g.evaluations as any[]) ?? []) {
+            const k = e.instructor ?? e.cesLink;
+            if (k && !evByKey.has(k)) evByKey.set(k, e);
+          }
+        }
+        return {
+          similarity: typeof similarity === "number" ? similarity : 0,
+          section: {
+            ...rep,
+            instructor_grades: igByInstructor.size ? [...igByInstructor.values()] : rep.instructor_grades,
+            evaluations: evByKey.size ? [...evByKey.values()] : rep.evaluations,
+            course_sections: group.map((g) => ({
+              section_id: g.section_id,
+              instructors: g.instructors,
+              instruction_mode: g.instruction_mode,
+              register_url: g.register_url,
+              schedule_days: g.schedule_days,
+              schedule_hours: g.schedule_hours,
+              schedule_location: g.schedule_location,
+            })),
+          },
+        };
       });
+      // If the question names a specific course (its code appears in the query, e.g. "cs 439" ->
+      // "cs439"), show ONLY that course. Otherwise (vague/browse queries) keep the top course plus
+      // any others within the similarity margin.
+      const norm = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const queryNorm = norm(message);
+      const explicit = ranked.filter((r) => {
+        const header = (r.section as Record<string, unknown>).course_header as string;
+        const code = norm(courseCodeOf(header));
+        return code.length >= 4 && queryNorm.includes(code);
+      });
+      let chosen = explicit;
+      if (chosen.length === 0) {
+        const topSimilarity = ranked[0]?.similarity ?? 0;
+        chosen = ranked.filter((r, i) => i === 0 || topSimilarity - r.similarity <= MATCH_MARGIN);
+      }
+      // Only surface courses when the question is actually about courses. Meta/conversational
+      // questions ("what did I just ask") top out around 0.60 similarity; real course queries are
+      // ~0.64+, so below this we show no chips and give the model no sections.
+      const COURSE_MIN_SIMILARITY = 0.62;
+      const aboutCourses = (ranked[0]?.similarity ?? 0) >= COURSE_MIN_SIMILARITY;
+      const cleanSections = aboutCourses ? chosen.map((r) => r.section) : [];
 
       const injectedSections =
         cleanSections.length > 0

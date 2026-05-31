@@ -5,6 +5,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+export type SemesterGrades = { semester: string; grades: Record<string, number> };
+
+/** One offered section of a course (the chip collapses a course's sections; the dialog lists them). */
+export type CourseSection = {
+  section_id: number;
+  instructors: string[];
+  instruction_mode: string | null;
+  register_url: string | null;
+  schedule_days: string[] | null;
+  schedule_hours: string[] | null;
+  schedule_location: string[] | null;
+};
 
 /** A section as returned by the `match_sections_detailed` RPC and attached to the assistant message. */
 export type RetrievedSection = {
@@ -19,6 +41,7 @@ export type RetrievedSection = {
   core_curriculum: string[] | null;
   grade_data: Record<string, number> | null;
   instructor_grades: Array<{ instructor: string } & Record<string, number>> | null;
+  semester_grades: SemesterGrades[] | null;
   evaluations: Array<{
     instructor: string;
     courseRating: number;
@@ -26,6 +49,7 @@ export type RetrievedSection = {
     responseRate: number;
     cesLink: string;
   }> | null;
+  course_sections?: CourseSection[] | null;
 };
 
 const BUCKETS = ["A", "B", "C", "D", "F", "Other"] as const;
@@ -94,27 +118,26 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-function gradePercents(g: Record<string, number> | null) {
-  if (!g) return null;
-  const total = BUCKETS.reduce((n, b) => n + (g[b] ?? 0), 0);
-  if (!total) return null;
-  return BUCKETS.map((b) => ({
-    b,
-    count: g[b] ?? 0,
-    pct: Math.round(((g[b] ?? 0) / total) * 100),
-  })).filter((x) => x.pct > 0);
-}
-
 function GradeBar({ grades }: { grades: Record<string, number> | null }) {
-  const parts = gradePercents(grades);
-  if (!parts) return <span className="text-xs text-muted-foreground">No grade data</span>;
+  const total = grades ? BUCKETS.reduce((n, b) => n + (grades[b] ?? 0), 0) : 0;
+  if (!grades || !total) return <span className="text-xs text-muted-foreground">No grade data</span>;
+  
+  const parts = BUCKETS.map((b) => {
+    const count = grades[b] ?? 0;
+    return { b, count, width: (count / total) * 100, pct: Math.round((count / total) * 100) };
+  });
   return (
     <div>
       <div className="flex h-2.5 w-full overflow-hidden rounded-full">
         {parts.map((p) => (
           <Tooltip key={p.b}>
             <TooltipTrigger asChild>
-              <div className={BUCKET_COLOR[p.b] ?? "bg-muted"} style={{ width: `${p.pct}%` }} />
+              <motion.div
+                className={BUCKET_COLOR[p.b] ?? "bg-muted"}
+                initial={false}
+                animate={{ width: `${p.width}%` }}
+                transition={{ duration: 0.35, ease: "easeInOut" }}
+              />
             </TooltipTrigger>
             <TooltipContent>
               {p.count} {p.count === 1 ? "student" : "students"} received {p.b == "A" ? "an" : "a"} {p.b}
@@ -123,12 +146,207 @@ function GradeBar({ grades }: { grades: Record<string, number> | null }) {
         ))}
       </div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-        {parts.map((p) => (
-          <span key={p.b}>
-            {p.b} {p.pct}%
-          </span>
-        ))}
+        {parts
+          .filter((p) => p.pct > 0)
+          .map((p) => (
+            <span key={p.b}>
+              <span className="font-semibold text-foreground">{p.b}</span> {p.pct}%
+            </span>
+          ))}
       </div>
+    </div>
+  );
+}
+
+const SEASON_ORDER: Record<string, number> = { Spring: 1, Summer: 2, Fall: 3 };
+// "Fall 2024" -> sortable number (most recent = largest).
+function semesterValue(s: string): number {
+  const [season, year] = s.split(" ");
+  return Number(year) * 10 + (SEASON_ORDER[season ?? ""] ?? 0);
+}
+
+function sumGrades(list: SemesterGrades[]): Record<string, number> {
+  const total: Record<string, number> = {};
+  for (const { grades } of list) {
+    for (const b of BUCKETS) total[b] = (total[b] ?? 0) + (grades?.[b] ?? 0);
+  }
+  return total;
+}
+
+const AGGREGATE = "aggregate";
+
+/** Grade distribution with a single dropdown: Aggregate or any semester (data spans Fall 2020 on). */
+function CourseGrades({
+  aggregate,
+  semesters,
+}: {
+  aggregate: Record<string, number> | null;
+  semesters: SemesterGrades[];
+}) {
+  const sorted = [...semesters].sort((a, z) => semesterValue(z.semester) - semesterValue(a.semester));
+  const hasSemesters = sorted.length > 0;
+  const [selected, setSelected] = useState(AGGREGATE);
+
+  const aggGrades = hasSemesters ? sumGrades(sorted) : aggregate;
+  const grades = selected === AGGREGATE ? aggGrades : sorted.find((s) => s.semester === selected)?.grades ?? null;
+
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <SectionLabel>Grade distribution</SectionLabel>
+        {hasSemesters && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted">
+              {selected === AGGREGATE ? "Aggregate" : selected}
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-64">
+              <DropdownMenuRadioGroup value={selected} onValueChange={setSelected}>
+                <DropdownMenuRadioItem value={AGGREGATE} className="text-xs">
+                  Aggregate
+                </DropdownMenuRadioItem>
+                {sorted.map((s) => (
+                  <DropdownMenuRadioItem key={s.semester} value={s.semester} className="text-xs">
+                    {s.semester}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      <GradeBar grades={grades} />
+    </section>
+  );
+}
+
+// UT course numbers encode credits + level: 1st digit = semester credit hours; 2nd–3rd digits =
+// rank (01–19 lower-division, 20–79 upper-division, 80–99 graduate). e.g. "C S 329E" -> 3 cr, upper.
+function courseMeta(code: string): { credits: number; level: string } | null {
+  const m = code.match(/(\d{3})[A-Z]*$/);
+  if (!m) return null;
+  const digits = m[1]!;
+  const rank = Number(digits.slice(1));
+  const level = rank <= 19 ? "Lower-division" : rank <= 79 ? "Upper-division" : "Graduate";
+  return { credits: Number(digits[0]), level };
+}
+
+/** Meeting rows ("MWF" / hours / location) from a section's parallel schedule arrays. */
+function meetingsOf(sec: CourseSection) {
+  return (sec.schedule_days ?? []).map((d, i) => ({
+    days: d.trim(),
+    hours: formatHours(sec.schedule_hours?.[i] ?? ""),
+    location: (sec.schedule_location?.[i] ?? "").trim(),
+  }));
+}
+
+function RegisterLink({ sec }: { sec: CourseSection }) {
+  if (!sec.register_url) return <span className="text-xs text-muted-foreground">#{sec.section_id}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => window.open(sec.register_url!, "_blank", "noopener,noreferrer")}
+      className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+    >
+      #{sec.section_id}
+      <ExternalLink className="h-3 w-3" />
+    </button>
+  );
+}
+
+function Meetings({ sec }: { sec: CourseSection }) {
+  const ms = meetingsOf(sec);
+  if (!ms.length) return <p className="text-sm text-muted-foreground">No scheduled meeting times</p>;
+  return (
+    <>
+      {ms.map((m, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+          {m.days && (
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">{m.days}</span>
+          )}
+          {m.hours && <span>{m.hours}</span>}
+          {m.location && <span className="text-muted-foreground">{m.location}</span>}
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** A single-section course: the original "Taught by … / Meets" layout. */
+function SingleSection({ sec }: { sec: CourseSection }) {
+  const ins = sec.instructors.map(formatName).filter(Boolean);
+  return (
+    <section className="space-y-1.5">
+      {ins.length > 0 && (
+        <p className="text-sm">
+          <span className="text-muted-foreground">Taught by </span>
+          {ins.join(", ")}
+        </p>
+      )}
+      <SectionLabel>{meetingsOf(sec).length ? "Meets" : "Schedule"}</SectionLabel>
+      <Meetings sec={sec} />
+    </section>
+  );
+}
+
+/** Sections grouped by professor, each group collapsible (collapsed by default). */
+function SectionsByProfessor({ sections }: { sections: CourseSection[] }) {
+  const groups = new Map<string, CourseSection[]>();
+  for (const sec of sections) {
+    const prof = sec.instructors.map(formatName).filter(Boolean).join(", ") || "Instructor TBA";
+    let arr = groups.get(prof);
+    if (!arr) {
+      arr = [];
+      groups.set(prof, arr);
+    }
+    arr.push(sec);
+  }
+  const entries = Array.from(groups.entries()).sort((a, z) => a[0].localeCompare(z[0]));
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([prof, secs]) => {
+        const isOpen = open[prof] ?? false;
+        return (
+          <div key={prof} className="overflow-hidden rounded-lg border">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => ({ ...o, [prof]: !isOpen }))}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+            >
+              <span className="text-sm font-medium">{prof}</span>
+              <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {secs.length} section{secs.length > 1 ? "s" : ""}
+                {isOpen ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+              </span>
+            </button>
+            <AnimatePresence initial={false}>
+              {isOpen && (
+                <motion.div
+                  key="content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="divide-y border-t">
+                    {secs.map((sec) => (
+                      <div key={sec.section_id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <div className="min-w-0 space-y-1">
+                          <Meetings sec={sec} />
+                        </div>
+                        <RegisterLink sec={sec} />
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -136,12 +354,24 @@ function GradeBar({ grades }: { grades: Record<string, number> | null }) {
 function CourseDetail({ s }: { s: RetrievedSection }) {
   const code = courseCode(s.course_header);
   const name = titleCase(s.course_header.slice(code.length).trim());
-  const instructors = s.instructors.map(formatName).filter(Boolean);
-  const meetings = (s.schedule_days ?? []).map((d, i) => ({
-    days: d.trim(),
-    hours: formatHours(s.schedule_hours?.[i] ?? ""),
-    location: (s.schedule_location?.[i] ?? "").trim(),
-  }));
+  const meta = courseMeta(code);
+  // The chip is one course; show every section here. Falls back to the section's own fields for
+  // older messages whose annotation predates course_sections.
+  const sections: CourseSection[] =
+    s.course_sections && s.course_sections.length
+      ? s.course_sections
+      : [
+          {
+            section_id: s.section_id,
+            instructors: s.instructors,
+            instruction_mode: s.instruction_mode,
+            register_url: s.register_url,
+            schedule_days: s.schedule_days,
+            schedule_hours: s.schedule_hours,
+            schedule_location: s.schedule_location,
+          },
+        ];
+  const multi = sections.length > 1;
   const core = (s.core_curriculum ?? []).map((c) => c.trim()).filter(Boolean);
   const evalByInstructor = new Map((s.evaluations ?? []).map((e) => [e.instructor, e]));
 
@@ -157,8 +387,16 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
         <DialogTitle className="pr-6 text-xl leading-tight">{name || code}</DialogTitle>
       </DialogHeader>
 
-      {(s.instruction_mode || core.length > 0) && (
+      {(meta || s.instruction_mode || core.length > 0) && (
         <div className="flex flex-wrap gap-2">
+          {meta && (
+            <>
+              <Badge variant="secondary">
+                {meta.credits} {meta.credits === 1 ? "credit" : "credits"}
+              </Badge>
+              <Badge variant="secondary">{meta.level}</Badge>
+            </>
+          )}
           {s.instruction_mode && <Badge variant="secondary">{s.instruction_mode}</Badge>}
           {core.map((c) => (
             <Badge key={c} variant="outline">{c}</Badge>
@@ -166,36 +404,16 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
         </div>
       )}
 
-      {instructors.length > 0 && (
-        <p className="text-sm">
-          <span className="text-muted-foreground">Taught by </span>
-          {instructors.join(", ")}
-        </p>
+      {multi ? (
+        <section className="space-y-2">
+          <SectionLabel>{`${sections.length} sections`}</SectionLabel>
+          <SectionsByProfessor sections={sections} />
+        </section>
+      ) : (
+        <SingleSection sec={sections[0]!} />
       )}
 
-      <section className="space-y-1.5">
-        <SectionLabel>{meetings.length ? "Meets" : "Schedule"}</SectionLabel>
-        {meetings.length ? (
-          meetings.map((m, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-              {m.days && (
-                <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
-                  {m.days}
-                </span>
-              )}
-              {m.hours && <span>{m.hours}</span>}
-              {m.location && <span className="text-muted-foreground">{m.location}</span>}
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">No scheduled meeting times</p>
-        )}
-      </section>
-
-      <section className="space-y-2">
-        <SectionLabel>Grade distribution</SectionLabel>
-        <GradeBar grades={s.grade_data} />
-      </section>
+      <CourseGrades aggregate={s.grade_data} semesters={s.semester_grades ?? []} />
 
       {s.instructor_grades && s.instructor_grades.length > 0 && (
         <section className="space-y-2">
@@ -207,9 +425,18 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{formatName(ig.instructor)}</span>
                   {ev && (ev.courseRating > 0 || ev.instructorRating > 0) && (
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      CES {ev.courseRating}/5 · prof {ev.instructorRating}/5
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {ev.courseRating > 0 && (
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+                          CES {ev.courseRating}/5
+                        </span>
+                      )}
+                      {ev.instructorRating > 0 && (
+                        <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+                          Prof {ev.instructorRating}/5
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 <GradeBar grades={ig} />
@@ -219,10 +446,10 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
         </section>
       )}
 
-      {s.register_url && (
+      {!multi && sections[0]?.register_url && (
         <Button
           className="w-full"
-          onClick={() => window.open(s.register_url!, "_blank", "noopener,noreferrer")}
+          onClick={() => window.open(sections[0]!.register_url!, "_blank", "noopener,noreferrer")}
         >
           View on UT Registration
         </Button>
@@ -230,6 +457,21 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
     </div>
     </TooltipProvider>
   );
+}
+
+/** Unique professors teaching the course across all its sections (deduped, display-formatted). */
+function courseProfessors(s: RetrievedSection): string[] {
+  const sections = s.course_sections?.length
+    ? s.course_sections
+    : [{ instructors: s.instructors }];
+  const set = new Set<string>();
+  for (const sec of sections) {
+    for (const inst of sec.instructors ?? []) {
+      const name = formatName(inst);
+      if (name) set.add(name);
+    }
+  }
+  return Array.from(set);
 }
 
 export default function CourseChips({ annotations }: { annotations?: unknown[] }) {
@@ -240,23 +482,21 @@ export default function CourseChips({ annotations }: { annotations?: unknown[] }
   return (
     <>
       <div className="mt-3 flex flex-wrap gap-2 not-prose">
-        {sections.map((s) => (
-          <button
-            key={s.section_id}
-            type="button"
-            onClick={() => setSelected(s)}
-            className="rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:bg-muted"
-          >
-            <span className="font-medium">{courseCode(s.course_header)}</span>
-            {s.instructors[0] && (
-              <span className="text-muted-foreground">
-                {" · "}
-                {formatName(s.instructors[0])}
-                {s.instructors.length > 1 ? ` +${s.instructors.length - 1}` : ""}
-              </span>
-            )}
-          </button>
-        ))}
+        {sections.map((s) => {
+          const profs = courseProfessors(s);
+          const label = profs.length === 1 ? profs[0] : profs.length > 1 ? `${profs.length} professors` : "";
+          return (
+            <button
+              key={s.section_id}
+              type="button"
+              onClick={() => setSelected(s)}
+              className="rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:bg-muted"
+            >
+              <span className="font-medium">{courseCode(s.course_header)}</span>
+              {label && <span className="text-muted-foreground"> {label}</span>}
+            </button>
+          );
+        })}
       </div>
 
       <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>

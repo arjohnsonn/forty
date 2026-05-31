@@ -45,7 +45,18 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {user ? <Sidebar userEmail={user.email ?? ""} /> : <Navbar />}
+          {user ? (
+            <Sidebar
+              userEmail={user.email ?? ""}
+              userName={
+                (user.user_metadata?.full_name as string) ??
+                (user.user_metadata?.name as string) ??
+                ""
+              }
+            />
+          ) : (
+            <Navbar />
+          )}
 
           <main
             style={{

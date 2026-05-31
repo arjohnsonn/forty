@@ -14,12 +14,23 @@ import {
   PanelRightOpen,
   PanelRightClose,
   Trash2,
+  Pencil,
+  MoreHorizontal,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
 import { parseMessages, deriveTitle } from "@/lib/conversations";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,11 +51,13 @@ type SidebarItemProps = {
   text: string;
   active?: boolean;
   target?: string;
+  onClick?: () => void;
 };
 
-const SidebarItem = ({ href, icon, text, active, target }: SidebarItemProps) => (
+const SidebarItem = ({ href, icon, text, active, target, onClick }: SidebarItemProps) => (
   <Link
     href={href}
+    onClick={onClick}
     className={cn(
       "flex items-center gap-3 rounded-lg px-4 py-2 transition-colors duration-150 ease-in-out",
       active
@@ -76,7 +89,7 @@ const Section = ({
   </div>
 );
 
-export function Sidebar({ userEmail }: { userEmail: string }) {
+export function Sidebar({ userEmail, userName }: { userEmail: string; userName: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -85,11 +98,14 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [renameTarget, setRenameTarget] = useState<Conversation | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
 
   const fetchConversations = useCallback(async () => {
     const { data } = await supabase
       .from("conversations")
-      .select("id, messages, created_at, deleted")
+      .select("id, messages, created_at, deleted, title")
       .order("created_at", { ascending: false });
 
     setConversations(
@@ -97,7 +113,7 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
         .filter((c) => !c.deleted)
         .map((c) => ({
           id: c.id as string,
-          title: deriveTitle(parseMessages(c.messages)),
+          title: (c.title as string | null)?.trim() || deriveTitle(parseMessages(c.messages)),
         }))
     );
   }, [supabase]);
@@ -116,6 +132,16 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
       supabase.removeChannel(channel);
     };
   }, [supabase, fetchConversations]);
+
+  // Reflect a rename done from the conversation header immediately (without waiting on a refetch).
+  useEffect(() => {
+    const onRename = (e: Event) => {
+      const { id, title } = (e as CustomEvent<{ id: string; title: string }>).detail;
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+    };
+    window.addEventListener("forty:rename", onRename);
+    return () => window.removeEventListener("forty:rename", onRename);
+  }, []);
 
   // Initial load + refresh on navigation (also a safety net if Realtime drops an event).
   useEffect(() => {
@@ -141,9 +167,8 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
     };
   }, [collapsed, isMobile]);
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDelete = async (id: string) => {
+    setDeleteTarget(null);
     setConversations((prev) => prev.filter((c) => c.id !== id));
     const { error } = await supabase
       .from("conversations")
@@ -154,10 +179,28 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
       toast({ variant: "destructive", title: "Couldn't delete chat" });
       return;
     }
+    // Resets the in-place landing view if it's showing this chat (router desynced); the pathname
+    // check handles the normal /chat/<id> route.
+    window.dispatchEvent(new CustomEvent("forty:deleted", { detail: { id } }));
     if (pathname === `/chat/${id}`) router.push("/");
   };
 
-  const initials = (userEmail || "?").charAt(0).toUpperCase();
+  const handleRename = async () => {
+    const target = renameTarget;
+    const next = draftTitle.trim();
+    setRenameTarget(null);
+    if (!target || !next || next === target.title) return;
+    setConversations((prev) => prev.map((c) => (c.id === target.id ? { ...c, title: next } : c)));
+    window.dispatchEvent(new CustomEvent("forty:rename", { detail: { id: target.id, title: next } }));
+    const { error } = await supabase.from("conversations").update({ title: next }).eq("id", target.id);
+    if (error) {
+      fetchConversations();
+      toast({ variant: "destructive", title: "Couldn't rename chat" });
+    }
+  };
+
+  const displayName = userName?.trim() || userEmail;
+  const initials = (displayName || "?").charAt(0).toUpperCase();
 
   return (
     <>
@@ -207,6 +250,9 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
               icon={<SquarePen className="h-4 w-4" />}
               text="New chat"
               active={pathname === "/"}
+              // Reset the landing UI even when the router already thinks it's on "/" (after an
+              // in-place chat start, where the URL was changed via history.replaceState).
+              onClick={() => window.dispatchEvent(new Event("forty:new-chat"))}
             />
           </Section>
 
@@ -217,27 +263,52 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
               conversations.map((c) => {
                 const active = pathname === `/chat/${c.id}`;
                 return (
-                  <div key={c.id} className="group relative">
+                  <div
+                    key={c.id}
+                    className={cn(
+                      "group relative rounded-lg transition-colors duration-150",
+                      active ? "bg-foreground/10" : "hover:bg-foreground/10"
+                    )}
+                  >
                     <Link
                       href={`/chat/${c.id}`}
                       title={c.title}
                       className={cn(
-                        "block truncate rounded-lg py-2 pl-4 pr-9 text-sm transition-colors duration-150",
-                        active
-                          ? "bg-foreground/10 text-foreground"
-                          : "text-zinc-400 hover:bg-foreground/10 hover:text-foreground"
+                        "block truncate rounded-lg py-2 pl-4 pr-10 text-sm transition-colors duration-150",
+                        active ? "text-foreground" : "text-zinc-400 group-hover:text-foreground"
                       )}
                     >
                       {c.title}
                     </Link>
-                    <button
-                      onClick={(e) => handleDelete(c.id, e)}
-                      title="Delete chat"
-                      aria-label="Delete chat"
-                      className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-zinc-400 hover:text-foreground group-hover:block"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="absolute inset-y-0 right-1.5 flex items-center">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          title="Chat options"
+                          aria-label="Chat options"
+                          className="rounded p-1 text-zinc-400 opacity-0 transition-opacity hover:bg-foreground/20 hover:text-foreground focus:outline-none group-hover:opacity-100 data-[state=open]:opacity-100"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" side="right">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDraftTitle(c.title);
+                              setRenameTarget(c);
+                            }}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setDeleteTarget(c)}
+                            className="text-red-500 focus:bg-red-500/10 focus:text-red-500"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 );
               })
@@ -279,7 +350,7 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
                 <Avatar className="h-8 w-8">
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
-                <span className="truncate text-sm">{userEmail}</span>
+                <span className="truncate text-sm">{displayName}</span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="top" className="w-56">
@@ -303,6 +374,53 @@ export function Sidebar({ userEmail }: { userEmail: string }) {
           onClick={() => setMobileOpen(false)}
         />
       )}
+
+      <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename chat</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleRename();
+              }
+            }}
+            placeholder="Chat name"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRename} disabled={!draftTitle.trim()}>
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete chat?</DialogTitle>
+            <DialogDescription>
+              This permanently removes “{deleteTarget?.title}”. This can’t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => deleteTarget && handleDelete(deleteTarget.id)}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -71,9 +71,10 @@ const NewConvo = ({ onSubmit }: Props) => {
           )}
         </h1>
 
-        <div className="flex flex-col items-center justify-center md:w-full w-[95%] rounded-3xl border shadow-sm focus-within:ring-1 focus-within:ring-ring transition-colors">
+        <div className="flex w-[95%] items-end gap-2 rounded-3xl border py-1.5 pl-4 pr-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring md:w-full">
           <TextareaExpand
-            className="rounded-3xl w-full mt-2 resize-none overflow-y-auto max-h-60"
+            rows={1}
+            className="max-h-60 min-h-0 flex-1 resize-none self-center overflow-y-auto border-0 bg-transparent px-0 py-2 focus-visible:ring-0"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -89,24 +90,22 @@ const NewConvo = ({ onSubmit }: Props) => {
             name="query"
             required
           />
-          <div className="flex flex-row justify-end w-full px-3 pb-3">
-            <Button
-              className="rounded-full h-10 w-10 flex items-center justify-center p-0 bg-black dark:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              variant="outline"
-              onClick={() => {
-                const textarea = document.querySelector(
-                  'textarea[name="query"]'
-                ) as HTMLTextAreaElement | null;
-                if (!textarea || !textarea.value.trim()) return;
-                const query = textarea.value.trim();
-                onSubmit(greeting, query);
-                textarea.value = "";
-                textarea.dispatchEvent(new Event("input", { bubbles: true }));
-              }}
-            >
-              <ArrowUp className="w-5 h-5 dark:text-black text-white" />
-            </Button>
-          </div>
+          <Button
+            className="h-9 w-9 shrink-0 rounded-full bg-black p-0 transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white"
+            variant="outline"
+            onClick={() => {
+              const textarea = document.querySelector(
+                'textarea[name="query"]'
+              ) as HTMLTextAreaElement | null;
+              if (!textarea || !textarea.value.trim()) return;
+              const query = textarea.value.trim();
+              onSubmit(greeting, query);
+              textarea.value = "";
+              textarea.dispatchEvent(new Event("input", { bubbles: true }));
+            }}
+          >
+            <ArrowUp className="h-5 w-5 text-white dark:text-black" />
+          </Button>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-x-2 mx-6">
