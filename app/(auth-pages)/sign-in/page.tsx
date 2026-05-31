@@ -1,6 +1,7 @@
 import { signInAction, signInWithGoogleAction } from "@/app/actions";
 import { FormMessage, Message } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
+import { GoogleIcon } from "@/components/google-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
@@ -43,6 +44,7 @@ export default async function Login(props: { searchParams: Promise<Message> }) {
           formNoValidate
           pendingText="Continuing..."
         >
+          <GoogleIcon className="mr-2 h-4 w-4" />
           Continue with Google
         </SubmitButton>
         <FormMessage message={searchParams} />

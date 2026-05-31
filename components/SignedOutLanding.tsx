@@ -1,5 +1,6 @@
 import { signInWithGoogleAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { GoogleIcon } from "@/components/google-icon";
 
 export default function SignedOutLanding() {
   return (
@@ -10,7 +11,7 @@ export default function SignedOutLanding() {
           <span className="font-semibold text-texas">perfect UT schedule</span>
         </h1>
         <p className="whitespace-nowrap text-muted-foreground">
-          Sign in to plan your schedule with the help of AI using UT data
+          Sign in to plan your schedule with the help of AI using data from UT, RateMyProfessor, and more!
         </p>
         <form className="mt-6">
           <SubmitButton
@@ -18,6 +19,7 @@ export default function SignedOutLanding() {
             formNoValidate
             pendingText="Continuing…"
           >
+            <GoogleIcon className="mr-2 h-4 w-4" />
             Continue with Google
           </SubmitButton>
         </form>
