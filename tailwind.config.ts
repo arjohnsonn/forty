@@ -55,8 +55,8 @@ const config = {
   				foreground: 'hsl(var(--card-foreground))'
   			},
   			texas: {
-  				'500': 'rgb(191 87 0)',
-  				DEFAULT: 'rgb(191 87 0)'
+  				'500': 'rgb(191 87 0 / <alpha-value>)',
+  				DEFAULT: 'rgb(191 87 0 / <alpha-value>)'
   			},
   			chart: {
   				'1': 'hsl(var(--chart-1))',

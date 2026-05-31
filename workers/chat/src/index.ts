@@ -4,7 +4,9 @@ import {
   appendResponseMessages,
   createDataStreamResponse,
   createIdGenerator,
+  jsonSchema,
   streamText,
+  tool,
   type CoreMessage,
 } from "ai";
 
@@ -20,6 +22,7 @@ interface Env {
   GUEST_RATE_LIMITER: RateLimit;
   ALLOWED_ORIGINS?: string;
   MATCH_THRESHOLD?: string;
+  RMP_CACHE_TTL?: string;
 }
 
 // Same model + dimension as scripts/embed.ts, or query and doc vectors won't match.
@@ -52,6 +55,275 @@ async function embedQuery(text: string, apiKey: string): Promise<number[]> {
     );
   const data = (await res.json()) as { embedding: { values: number[] } };
   return normalize(data.embedding.values);
+}
+
+// RateMyProfessors live refresh. The snapshot (scripts/rmp.ts) pins each professor to an
+// rmp_legacy_id; here we fetch that professor's *current* numbers by id (cheap, exact — no
+// re-matching), short-cached at the edge, so a freshly-posted rating shows up without a re-scrape.
+const RMP_GQL = "https://www.ratemyprofessors.com/graphql";
+const RMP_AUTH = "Basic dGVzdDp0ZXN0"; // public hardcoded RMP web credential (test:test)
+const RMP_NODE_QUERY =
+  `query($id: ID!){ node(id: $id){ ... on Teacher { avgRating avgDifficulty numRatings wouldTakeAgainPercent } } }`;
+
+type RmpLive = {
+  rmpRating: number;
+  rmpDifficulty: number;
+  rmpNumRatings: number;
+  rmpWouldTakeAgain: number | null;
+};
+
+// A professor's RMP rating computed from reviews of one specific course (vs. their blended overall).
+type RmpCourse = {
+  code: string;
+  rating: number;
+  difficulty: number;
+  wouldTakeAgain: number | null;
+  numRatings: number;
+};
+
+// Below this many course-specific reviews the per-course average is too noisy — fall back to overall.
+const MIN_COURSE_RATINGS = 3;
+
+// "CH 302 PRINCIPLES OF CHEMISTRY" -> "CH302" (RMP's free-text class form, used as courseFilter).
+const rmpCourseCode = (header: string): string =>
+  (header.match(/^(.+?\s\d{1,3}[A-Z]*)(?:\s|$)/)?.[1] ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+// Current RMP numbers for one professor by legacyId. Edge-cached; null on miss/error/timeout (snapshot values are the fallback).
+async function fetchRmpLive(
+  legacyId: number,
+  ttl: number,
+  ctx: ExecutionContext,
+): Promise<RmpLive | null> {
+  const cache = caches.default;
+  const cacheKey = new Request(`https://rmp-cache.internal/teacher/${legacyId}`);
+  const hit = await cache.match(cacheKey);
+  if (hit) {
+    try {
+      return (await hit.json()) as RmpLive;
+    } catch {
+      // fall through to refetch
+    }
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 600);
+  try {
+    const res = await fetch(RMP_GQL, {
+      method: "POST",
+      headers: { Authorization: RMP_AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: RMP_NODE_QUERY,
+        variables: { id: btoa(`Teacher-${legacyId}`) },
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const node = ((await res.json()) as any)?.data?.node;
+    if (!node) return null;
+    const live: RmpLive = {
+      rmpRating: node.avgRating,
+      rmpDifficulty: node.avgDifficulty,
+      rmpNumRatings: node.numRatings,
+      rmpWouldTakeAgain:
+        typeof node.wouldTakeAgainPercent === "number" && node.wouldTakeAgainPercent >= 0
+          ? node.wouldTakeAgainPercent
+          : null,
+    };
+    ctx.waitUntil(
+      cache.put(
+        cacheKey,
+        new Response(JSON.stringify(live), {
+          headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` },
+        }),
+      ),
+    );
+    return live;
+  } catch {
+    return null; // RMP down/slow -> keep snapshot numbers
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// That professor's RMP rating from reviews of one course (RMP's free-text class code). Edge-cached incl. negatives; null below MIN_COURSE_RATINGS or on miss/error/timeout.
+async function fetchRmpCourse(
+  legacyId: number,
+  code: string,
+  ttl: number,
+  ctx: ExecutionContext,
+): Promise<RmpCourse | null> {
+  const safe = code.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  if (!safe) return null;
+  const cache = caches.default;
+  const cacheKey = new Request(`https://rmp-cache.internal/teacher/${legacyId}/course/${safe}`);
+  const hit = await cache.match(cacheKey);
+  if (hit) {
+    try {
+      return (await hit.json()) as RmpCourse | null;
+    } catch {
+      // fall through
+    }
+  }
+  const store = (value: RmpCourse | null) =>
+    ctx.waitUntil(
+      cache.put(
+        cacheKey,
+        new Response(JSON.stringify(value), {
+          headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` },
+        }),
+      ),
+    );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 600);
+  try {
+    const res = await fetch(RMP_GQL, {
+      method: "POST",
+      headers: { Authorization: RMP_AUTH, "Content-Type": "application/json" },
+      // `safe` is [A-Z0-9] only, so inlining it as the courseFilter literal is injection-safe.
+      body: JSON.stringify({
+        query: `query($id: ID!){ node(id: $id){ ... on Teacher { ratings(first: 100, courseFilter: "${safe}"){ edges { node { clarityRating helpfulRating difficultyRating wouldTakeAgain } } } } } }`,
+        variables: { id: btoa(`Teacher-${legacyId}`) },
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const edges = ((await res.json()) as any)?.data?.node?.ratings?.edges ?? [];
+    const reviews = edges.map((e: any) => e?.node).filter(Boolean);
+    if (reviews.length < MIN_COURSE_RATINGS) {
+      store(null);
+      return null;
+    }
+    const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
+    const answered = reviews.filter((r: any) => r.wouldTakeAgain === 0 || r.wouldTakeAgain === 1);
+    const result: RmpCourse = {
+      code: safe,
+      // RMP "quality" per review is the mean of its clarity + helpfulness sub-scores.
+      rating: Math.round(avg(reviews.map((r: any) => (Number(r.clarityRating) + Number(r.helpfulRating)) / 2)) * 10) / 10,
+      difficulty: Math.round(avg(reviews.map((r: any) => Number(r.difficultyRating))) * 10) / 10,
+      wouldTakeAgain: answered.length
+        ? Math.round((100 * answered.filter((r: any) => r.wouldTakeAgain === 1).length) / answered.length)
+        : null,
+      numRatings: reviews.length,
+    };
+    store(result);
+    return result;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Refresh each section's professor_ratings in place: overall numbers (by id) + the section-course rating (rmpCourse). Fetched once, in parallel; failures leave the snapshot numbers untouched.
+async function refreshRmpLive(
+  sections: Record<string, unknown>[],
+  ttl: number,
+  ctx: ExecutionContext,
+): Promise<void> {
+  const ids = new Set<number>();
+  const courseTasks: { prof: any; legacyId: number; code: string }[] = [];
+  for (const s of sections) {
+    const code = rmpCourseCode(s.course_header as string);
+    for (const p of (s.professor_ratings as any[]) ?? []) {
+      if (typeof p?.rmpLegacyId !== "number") continue;
+      ids.add(p.rmpLegacyId);
+      if (code) courseTasks.push({ prof: p, legacyId: p.rmpLegacyId, code });
+    }
+  }
+  if (!ids.size) return;
+
+  const overall = new Map<number, RmpLive>();
+  const perCourse = new Map<string, RmpCourse | null>();
+  const courseKeys = new Map<string, { legacyId: number; code: string }>();
+  for (const t of courseTasks) courseKeys.set(`${t.legacyId}|${t.code}`, { legacyId: t.legacyId, code: t.code });
+
+  await Promise.all([
+    ...[...ids].map(async (id) => {
+      const live = await fetchRmpLive(id, ttl, ctx);
+      if (live) overall.set(id, live);
+    }),
+    ...[...courseKeys].map(async ([key, { legacyId, code }]) => {
+      perCourse.set(key, await fetchRmpCourse(legacyId, code, ttl, ctx));
+    }),
+  ]);
+
+  for (const s of sections)
+    for (const p of (s.professor_ratings as any[]) ?? []) {
+      const live = overall.get(p.rmpLegacyId);
+      if (live) Object.assign(p, live);
+    }
+  for (const t of courseTasks) {
+    const c = perCourse.get(`${t.legacyId}|${t.code}`);
+    if (c) t.prof.rmpCourse = c;
+  }
+}
+
+const RMP_SCHOOL = btoa("School-1255"); // The University of Texas at Austin
+const HONORIFICS = new Set(["dr", "prof", "professor", "mr", "ms", "mrs"]);
+
+type RmpMatch = { legacyId: number; name: string; department: string | null };
+
+// Best-effort RMP profile for a free-text professor name (UT-scoped). Prefers an exact first+last token match, else the most-rated candidate. Null when RMP returns nothing.
+async function searchRmpTeacher(name: string): Promise<RmpMatch | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1500);
+  try {
+    const res = await fetch(RMP_GQL, {
+      method: "POST",
+      headers: { Authorization: RMP_AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `query($q: TeacherSearchQuery!){ newSearch { teachers(query: $q, first: 8){ edges { node { legacyId firstName lastName department numRatings } } } } }`,
+        variables: { q: { text: name, schoolID: RMP_SCHOOL } },
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const nodes = (((await res.json()) as any)?.data?.newSearch?.teachers?.edges ?? [])
+      .map((e: any) => e?.node)
+      .filter((n: any) => n?.legacyId != null);
+    if (!nodes.length) return null;
+    const tokens = name.toLowerCase().split(/[\s,]+/).filter(Boolean);
+    const fullName = (n: any) => `${n.firstName} ${n.lastName}`.toLowerCase();
+    // Prefer exact first+last token matches; among those (RMP has duplicate profiles) take the
+    // most-rated — the canonical one. Fall back to the most-rated of all candidates.
+    const exacts = nodes.filter((n: any) => tokens.every((t: string) => fullName(n).includes(t)));
+    const pick = (exacts.length ? exacts : [...nodes]).sort(
+      (a: any, b: any) => (b.numRatings ?? 0) - (a.numRatings ?? 0),
+    )[0];
+    return {
+      legacyId: pick.legacyId,
+      name: `${(pick.firstName ?? "").trim()} ${(pick.lastName ?? "").trim()}`.trim(),
+      department: pick.department ?? null,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Resolve a free-text professor name to an RMP profile: verified instructors first (pinned legacyId), then a live RMP search (covers professors not in our data).
+async function resolveProfessor(
+  supabase: any,
+  name: string,
+): Promise<(RmpMatch & { source: "db" | "rmp" }) | null> {
+  const tokens = name
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .map((t) => t.replace(/[%_*]/g, "")) // strip ilike/PostgREST wildcards so a name can't broaden the match
+    .filter((t) => t.length > 1 && !HONORIFICS.has(t));
+  if (tokens.length) {
+    let q = supabase
+      .from("instructors")
+      .select("name, rmp_legacy_id, rmp_department")
+      .not("rmp_legacy_id", "is", null);
+    for (const t of tokens) q = q.ilike("name", `%${t}%`);
+    const { data } = await q.order("rmp_num_ratings", { ascending: false, nullsFirst: false }).limit(1);
+    const row: any = (data as any)?.[0];
+    if (row?.rmp_legacy_id != null)
+      return { legacyId: row.rmp_legacy_id, name: row.name, department: row.rmp_department ?? null, source: "db" };
+  }
+  const rmp = await searchRmpTeacher(name);
+  return rmp ? { ...rmp, source: "rmp" } : null;
 }
 
 function corsHeaders(req: Request, env: Env): Record<string, string> {
@@ -90,8 +362,20 @@ const SYSTEM_PROMPT =
   `instructors, meeting schedule, instruction mode, the historical course-wide grade distribution (grade_data), ` +
   `per-professor grade distributions (instructor_grades), the grade distribution broken down by semester ` +
   `(semester_grades, an array of { semester, grades } from Fall 2020 onward — use it to describe trends over ` +
-  `time, e.g. whether a course has gotten harder), and past course evaluations (evaluations, with ` +
-  `courseRating and instructorRating out of 5). Grade fields are counts of A/B/C/D/F/Other. ` +
+  `time, e.g. whether a course has gotten harder), past course evaluations (evaluations, with ` +
+  `courseRating and instructorRating out of 5), and RateMyProfessors ratings (professor_ratings, with ` +
+  `rmpRating and rmpDifficulty out of 5, rmpWouldTakeAgain as a percentage, and rmpNumRatings — these are ` +
+  `student-submitted ratings from RateMyProfessors, separate from the official CES evaluations; call them ` +
+  `"RateMyProfessors" so the two aren't confused, and if a professor has no professor_ratings entry or ` +
+  `rmpNumRatings is 0, don't cite an RMP score). A professor_ratings entry may also include rmpCourse — ` +
+  `that same professor's RateMyProfessors rating computed only from reviews of THIS course (rmpCourse.code), ` +
+  `with rmpCourse.rating and rmpCourse.difficulty out of 5, rmpCourse.wouldTakeAgain percent, and ` +
+  `rmpCourse.numRatings reviews. When the question is about that specific course, prefer rmpCourse over the ` +
+  `blended overall RMP numbers and note it's course-specific (e.g. "in CH302 specifically"). ` +
+  `For any professor the user names — including one not in the Sections data, or a course a professor is ` +
+  `not teaching this term — call the getProfessorRating tool to fetch their RateMyProfessors numbers (pass ` +
+  `the course code for course-specific or comparison questions) instead of saying the data is unavailable. ` +
+  `Grade fields are counts of A/B/C/D/F/Other. ` +
   `Instructor names in the structured fields are "LAST, FIRST" (e.g. "LEWIS, CHARLTON N") while the summary ` +
   `prose uses "First Last" (e.g. "Charlton N Lewis") — treat them as the same person when matching a query. ` +
   `instructor_grades covers every instructor of a section, but evaluations may exist for only some of them; ` +
@@ -261,6 +545,7 @@ export default {
         const { status: _status, similarity, ...rep } = group[0]!;
         const igByInstructor = new Map<string, unknown>();
         const evByKey = new Map<string, any>();
+        const rmpByInstructor = new Map<string, unknown>();
         for (const g of group) {
           for (const ig of (g.instructor_grades as any[]) ?? [])
             if (!igByInstructor.has(ig.instructor)) igByInstructor.set(ig.instructor, ig);
@@ -268,6 +553,8 @@ export default {
             const k = e.instructor ?? e.cesLink;
             if (k && !evByKey.has(k)) evByKey.set(k, e);
           }
+          for (const p of (g.professor_ratings as any[]) ?? [])
+            if (p?.instructor && !rmpByInstructor.has(p.instructor)) rmpByInstructor.set(p.instructor, p);
         }
         return {
           similarity: typeof similarity === "number" ? similarity : 0,
@@ -275,6 +562,7 @@ export default {
             ...rep,
             instructor_grades: igByInstructor.size ? [...igByInstructor.values()] : rep.instructor_grades,
             evaluations: evByKey.size ? [...evByKey.values()] : rep.evaluations,
+            professor_ratings: rmpByInstructor.size ? [...rmpByInstructor.values()] : rep.professor_ratings,
             course_sections: group.map((g) => ({
               section_id: g.section_id,
               instructors: g.instructors,
@@ -309,6 +597,12 @@ export default {
       const aboutCourses = (ranked[0]?.similarity ?? 0) >= COURSE_MIN_SIMILARITY;
       const cleanSections = aboutCourses ? chosen.map((r) => r.section) : [];
 
+      // Swap the snapshot RMP numbers for live ones (edge-cached) before they reach the model + UI.
+      if (cleanSections.length > 0) {
+        const rmpTtl = env.RMP_CACHE_TTL ? Number(env.RMP_CACHE_TTL) : 3600;
+        await refreshRmpLive(cleanSections as Record<string, unknown>[], rmpTtl, ctx);
+      }
+
       const injectedSections =
         cleanSections.length > 0
           ? JSON.stringify(cleanSections)
@@ -325,25 +619,103 @@ export default {
 
       return createDataStreamResponse({
         headers: cors,
-        // Attach retrieved sections for the UI's course chips (read via message.annotations).
+        // Course chips are attached in onFinish, filtered to the courses the answer actually
+        // discusses (so retrieved-but-unmentioned courses don't show up as chips).
         execute: (dataStream) => {
-          if (cleanSections.length > 0) {
-            dataStream.writeMessageAnnotation({
-              type: "courses",
-              sections: cleanSections,
-            } as any);
-          }
           const result = streamText({
             model: google("gemini-2.5-flash"),
             system: SYSTEM_PROMPT,
             messages: completionMessages,
             temperature: 0.3,
             maxTokens: 4096,
+            maxSteps: 5,
+            tools: {
+              getProfessorRating: tool({
+                description:
+                  "Look up a professor's RateMyProfessors ratings — overall, or for a specific course using ALL of that professor's reviews for it (including courses they are NOT teaching this semester). Use whenever the user names a specific professor and asks about their RMP rating/difficulty, or wants to compare a professor across courses. Pass the course code (e.g. M408C, CH302) when the question is course-specific. Do not say RMP data is unavailable without calling this first.",
+                parameters: jsonSchema<{ professor: string; course?: string }>({
+                  type: "object",
+                  properties: {
+                    professor: {
+                      type: "string",
+                      description: "Professor name as the user wrote it, e.g. 'Eric Staron' or 'Staron'.",
+                    },
+                    course: {
+                      type: "string",
+                      description: "Optional course code, e.g. 'M408C' or 'CH 302'. Omit for the overall rating.",
+                    },
+                  },
+                  required: ["professor"],
+                  additionalProperties: false,
+                }),
+                execute: async ({ professor, course }) => {
+                  const ttl = env.RMP_CACHE_TTL ? Number(env.RMP_CACHE_TTL) : 3600;
+                  const who = await resolveProfessor(supabase, professor);
+                  if (!who)
+                    return { found: false, message: `No RateMyProfessors profile found for "${professor}" at UT Austin.` };
+                  const overall = await fetchRmpLive(who.legacyId, ttl, ctx);
+                  const out: Record<string, unknown> = {
+                    found: true,
+                    professor: who.name,
+                    department: who.department,
+                    profileUrl: `https://www.ratemyprofessors.com/professor/${who.legacyId}`,
+                    overall: overall
+                      ? {
+                          rating: overall.rmpRating,
+                          difficulty: overall.rmpDifficulty,
+                          wouldTakeAgainPercent: overall.rmpWouldTakeAgain,
+                          numRatings: overall.rmpNumRatings,
+                        }
+                      : null,
+                  };
+                  if (course && course.trim()) {
+                    const c = await fetchRmpCourse(who.legacyId, course, ttl, ctx);
+                    out.course = c
+                      ? {
+                          code: c.code,
+                          rating: c.rating,
+                          difficulty: c.difficulty,
+                          wouldTakeAgainPercent: c.wouldTakeAgain,
+                          numRatings: c.numRatings,
+                        }
+                      : {
+                          code: course.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
+                          available: false,
+                          note: `Fewer than ${MIN_COURSE_RATINGS} RateMyProfessors reviews for this professor in this course — use the overall rating instead.`,
+                        };
+                  }
+                  return out;
+                },
+              }),
+            },
             experimental_generateMessageId: createIdGenerator({
               prefix: "msgs",
               size: 16,
             }),
             async onFinish({ response }) {
+              // Show chips only for courses the answer actually mentions (match the course code in
+              // the text). If it names none (e.g. a general/professor answer), keep all retrieved.
+              const answerText = response.messages
+                .filter((m: any) => m.role === "assistant")
+                .map((m: any) =>
+                  typeof m.content === "string"
+                    ? m.content
+                    : Array.isArray(m.content)
+                      ? m.content.map((p: any) => (p?.type === "text" ? p.text : "")).join(" ")
+                      : "",
+                )
+                .join(" ");
+              const answerNorm = norm(answerText);
+              const mentioned = (cleanSections as Record<string, unknown>[]).filter((s) => {
+                const codeNorm = norm(courseCodeOf(s.course_header as string));
+                return codeNorm.length >= 4 && answerNorm.includes(codeNorm);
+              });
+              const shownSections = mentioned.length > 0 ? mentioned : cleanSections;
+
+              if (shownSections.length > 0) {
+                dataStream.writeMessageAnnotation({ type: "courses", sections: shownSections } as any);
+              }
+
               // Only logged-in users persist conversations.
               if (!user || !chatId) return;
               const saved = appendResponseMessages({
@@ -352,8 +724,8 @@ export default {
               });
               // Re-attach the annotation (not in response.messages) so reloads keep the chips.
               const last = saved[saved.length - 1] as any;
-              if (last && cleanSections.length > 0) {
-                last.annotations = [{ type: "courses", sections: cleanSections }];
+              if (last && shownSections.length > 0) {
+                last.annotations = [{ type: "courses", sections: shownSections }];
               }
               const { error } = await supabase
                 .from("conversations")

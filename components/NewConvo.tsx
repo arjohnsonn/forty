@@ -91,7 +91,7 @@ const NewConvo = ({ onSubmit }: Props) => {
             required
           />
           <Button
-            className="h-9 w-9 shrink-0 rounded-full bg-black p-0 transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white"
+            className="h-9 w-9 shrink-0 rounded-full border-transparent bg-texas p-0 transition-colors hover:bg-texas/90 disabled:cursor-not-allowed disabled:opacity-50"
             variant="outline"
             onClick={() => {
               const textarea = document.querySelector(
@@ -104,7 +104,7 @@ const NewConvo = ({ onSubmit }: Props) => {
               textarea.dispatchEvent(new Event("input", { bubbles: true }));
             }}
           >
-            <ArrowUp className="h-5 w-5 text-white dark:text-black" />
+            <ArrowUp className="h-5 w-5 text-white" />
           </Button>
         </div>
 

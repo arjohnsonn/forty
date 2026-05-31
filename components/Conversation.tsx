@@ -268,15 +268,15 @@ const Conversation: React.FC<ConversationProps> = ({
                 placeholder="Message Forty…"
               />
               <Button
-                className="h-9 w-9 shrink-0 rounded-full bg-black p-0 disabled:opacity-50 dark:bg-white"
+                className="h-9 w-9 shrink-0 rounded-full border-transparent bg-texas p-0 hover:bg-texas/90 disabled:opacity-50"
                 variant="outline"
                 type="submit"
                 disabled={busy || !input.trim()}
               >
                 {busy ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-white dark:text-black" />
+                  <Loader2 className="h-5 w-5 animate-spin text-white" />
                 ) : (
-                  <ArrowUp className="h-5 w-5 text-white dark:text-black" />
+                  <ArrowUp className="h-5 w-5 text-white" />
                 )}
               </Button>
             </div>

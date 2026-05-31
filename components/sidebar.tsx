@@ -61,7 +61,7 @@ const SidebarItem = ({ href, icon, text, active, target, onClick }: SidebarItemP
     className={cn(
       "flex items-center gap-3 rounded-lg px-4 py-2 transition-colors duration-150 ease-in-out",
       active
-        ? "bg-foreground/10 text-foreground"
+        ? "bg-texas/10 text-texas"
         : "text-zinc-400 hover:bg-foreground/10 hover:text-foreground"
     )}
     title={text}
@@ -267,7 +267,7 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
                     key={c.id}
                     className={cn(
                       "group relative rounded-lg transition-colors duration-150",
-                      active ? "bg-foreground/10" : "hover:bg-foreground/10"
+                      active ? "bg-texas/10 text-texas" : "hover:bg-foreground/10"
                     )}
                   >
                     <Link

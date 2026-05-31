@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog, DialogPortal, DialogOverlay, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import ProfessorRmpPanel, { type RmpPanelProf } from "@/components/ProfessorRmpPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
@@ -12,10 +14,28 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, ExternalLink, Star, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export type SemesterGrades = { semester: string; grades: Record<string, number> };
+
+export type ProfessorRating = {
+  instructor: string;
+  rmpLegacyId: number;
+  rmpRating: number | null;
+  rmpDifficulty: number | null;
+  rmpWouldTakeAgain: number | null;
+  rmpNumRatings: number | null;
+  rmpDepartment: string | null;
+
+  rmpCourse?: {
+    code: string;
+    rating: number;
+    difficulty: number;
+    wouldTakeAgain: number | null;
+    numRatings: number;
+  } | null;
+};
 
 /** One offered section of a course (the chip collapses a course's sections; the dialog lists them). */
 export type CourseSection = {
@@ -49,6 +69,7 @@ export type RetrievedSection = {
     responseRate: number;
     cesLink: string;
   }> | null;
+  professor_ratings?: ProfessorRating[] | null;
   course_sections?: CourseSection[] | null;
 };
 
@@ -284,7 +305,12 @@ function SingleSection({ sec }: { sec: CourseSection }) {
         </p>
       )}
       <SectionLabel>{meetingsOf(sec).length ? "Meets" : "Schedule"}</SectionLabel>
-      <Meetings sec={sec} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <Meetings sec={sec} />
+        </div>
+        <RegisterLink sec={sec} />
+      </div>
     </section>
   );
 }
@@ -351,12 +377,57 @@ function SectionsByProfessor({ sections }: { sections: CourseSection[] }) {
   );
 }
 
-function CourseDetail({ s }: { s: RetrievedSection }) {
+function RmpRow({ rmp, onDetails }: { rmp: ProfessorRating; onDetails: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onDetails}
+      className="block w-full rounded-lg bg-muted/40 p-3 text-left transition-colors hover:bg-muted"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">RateMyProfessors</span>
+        <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+          Details
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+        {rmp.rmpRating != null && (
+          <span className="inline-flex items-center gap-1">
+            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+            <span className="font-semibold text-foreground">{rmp.rmpRating.toFixed(1)}</span>
+            <span className="text-xs text-muted-foreground">/5</span>
+          </span>
+        )}
+        {rmp.rmpNumRatings != null && (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+            {rmp.rmpNumRatings} ratings
+          </span>
+        )}
+        {rmp.rmpCourse && (
+          <>
+            <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
+            <span className="text-xs font-medium">In {rmp.rmpCourse.code}</span>
+            <span className="inline-flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+              <span className="font-semibold text-foreground">{rmp.rmpCourse.rating.toFixed(1)}</span>
+              <span className="text-xs text-muted-foreground">/5</span>
+            </span>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              {rmp.rmpCourse.numRatings} {rmp.rmpCourse.numRatings === 1 ? "rating" : "ratings"}
+            </span>
+          </>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function CourseDetail({ s, onOpenRmp }: { s: RetrievedSection; onOpenRmp: (prof: RmpPanelProf) => void }) {
   const code = courseCode(s.course_header);
   const name = titleCase(s.course_header.slice(code.length).trim());
   const meta = courseMeta(code);
-  // The chip is one course; show every section here. Falls back to the section's own fields for
-  // older messages whose annotation predates course_sections.
+
   const sections: CourseSection[] =
     s.course_sections && s.course_sections.length
       ? s.course_sections
@@ -374,6 +445,12 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
   const multi = sections.length > 1;
   const core = (s.core_curriculum ?? []).map((c) => c.trim()).filter(Boolean);
   const evalByInstructor = new Map((s.evaluations ?? []).map((e) => [e.instructor, e]));
+  const rmpByInstructor = new Map((s.professor_ratings ?? []).map((p) => [p.instructor, p]));
+  const gradesByInstructor = new Map((s.instructor_grades ?? []).map((ig) => [ig.instructor, ig]));
+
+  const profNames: string[] = [];
+  for (const ig of s.instructor_grades ?? []) if (!profNames.includes(ig.instructor)) profNames.push(ig.instructor);
+  for (const p of s.professor_ratings ?? []) if (!profNames.includes(p.instructor)) profNames.push(p.instructor);
 
   return (
     <TooltipProvider delayDuration={100}>
@@ -415,15 +492,17 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
 
       <CourseGrades aggregate={s.grade_data} semesters={s.semester_grades ?? []} />
 
-      {s.instructor_grades && s.instructor_grades.length > 0 && (
+      {profNames.length > 0 && (
         <section className="space-y-2">
           <SectionLabel>By professor</SectionLabel>
-          {s.instructor_grades.map((ig) => {
-            const ev = evalByInstructor.get(ig.instructor);
+          {profNames.map((name) => {
+            const grades = gradesByInstructor.get(name) ?? null;
+            const ev = evalByInstructor.get(name);
+            const rmp = rmpByInstructor.get(name);
             return (
-              <div key={ig.instructor} className="space-y-2 rounded-lg border p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">{formatName(ig.instructor)}</span>
+              <div key={name} className="space-y-2 rounded-lg border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{formatName(name)}</span>
                   {ev && (ev.courseRating > 0 || ev.instructorRating > 0) && (
                     <div className="flex shrink-0 items-center gap-1.5">
                       {ev.courseRating > 0 && (
@@ -439,7 +518,19 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
                     </div>
                   )}
                 </div>
-                <GradeBar grades={ig} />
+                {grades ? (
+                  <GradeBar grades={grades} />
+                ) : (
+                  <span className="text-xs text-muted-foreground">No grade data</span>
+                )}
+                {rmp && (rmp.rmpNumRatings ?? 0) > 0 && (
+                  <RmpRow
+                    rmp={rmp}
+                    onDetails={() =>
+                      onOpenRmp({ legacyId: rmp.rmpLegacyId, name: formatName(name), department: rmp.rmpDepartment })
+                    }
+                  />
+                )}
               </div>
             );
           })}
@@ -448,7 +539,7 @@ function CourseDetail({ s }: { s: RetrievedSection }) {
 
       {!multi && sections[0]?.register_url && (
         <Button
-          className="w-full"
+          className="w-full bg-texas text-white hover:bg-texas/90"
           onClick={() => window.open(sections[0]!.register_url!, "_blank", "noopener,noreferrer")}
         >
           View on UT Registration
@@ -477,6 +568,7 @@ function courseProfessors(s: RetrievedSection): string[] {
 export default function CourseChips({ annotations }: { annotations?: unknown[] }) {
   const sections = extractCourses(annotations);
   const [selected, setSelected] = useState<RetrievedSection | null>(null);
+  const [rmpProf, setRmpProf] = useState<RmpPanelProf | null>(null);
   if (!sections.length) return null;
 
   return (
@@ -490,7 +582,7 @@ export default function CourseChips({ annotations }: { annotations?: unknown[] }
               key={s.section_id}
               type="button"
               onClick={() => setSelected(s)}
-              className="rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:bg-muted"
+              className="rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:border-texas/60 hover:text-texas"
             >
               <span className="font-medium">{courseCode(s.course_header)}</span>
               {label && <span className="text-muted-foreground"> {label}</span>}
@@ -499,8 +591,60 @@ export default function CourseChips({ annotations }: { annotations?: unknown[] }
         })}
       </div>
 
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent>{selected && <CourseDetail s={selected} />}</DialogContent>
+      <Dialog
+        open={!!selected}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelected(null);
+            setRmpProf(null);
+          }
+        }}
+      >
+        <DialogPortal>
+          <DialogOverlay />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <DialogPrimitive.Content
+              aria-describedby={undefined}
+              className="relative flex items-start gap-3 outline-none ring-0 duration-200 focus:outline-none focus-visible:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+            >
+              {/* Course card */}
+              <div className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
+                <div className="max-h-[85vh] overflow-y-auto p-6">
+                  {selected && (
+                    <CourseDetail
+                      s={selected}
+                      onOpenRmp={(prof) =>
+                        setRmpProf((cur) => (cur?.legacyId === prof.legacyId ? null : prof))
+                      }
+                    />
+                  )}
+                </div>
+                <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </DialogPrimitive.Close>
+              </div>
+
+              {/* RateMyProfessors detail — slides out beside the card (desktop) */}
+              <AnimatePresence>
+                {rmpProf && (
+                  <motion.aside
+                    key="rmp-panel"
+                    initial={{ opacity: 0, width: 0, x: -12 }}
+                    animate={{ opacity: 1, width: 340, x: 0 }}
+                    exit={{ opacity: 0, width: 0, x: -12 }}
+                    transition={{ duration: 0.28, ease: "easeInOut" }}
+                    className="hidden overflow-hidden sm:block"
+                  >
+                    <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
+                      <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpProf(null)} />
+                    </div>
+                  </motion.aside>
+                )}
+              </AnimatePresence>
+            </DialogPrimitive.Content>
+          </div>
+        </DialogPortal>
       </Dialog>
     </>
   );
