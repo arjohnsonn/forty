@@ -5,7 +5,7 @@ SUPABASE_ANON_KEY=sb_publishable_xxx
 GOOGLE_GENERATIVE_AI_API_KEY=xxx
 
 # Comma-separated allowed origins for CORS (your site + localhost). Empty = allow all.
-ALLOWED_ORIGINS=https://utrgpt.vercel.app,http://localhost:3000
+ALLOWED_ORIGINS=https://fortyai.vercel.app,http://localhost:3000
 
 # Cosine threshold for vector match (0..1). Lower = more permissive.
 MATCH_THRESHOLD=0.5
