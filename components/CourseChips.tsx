@@ -6,6 +6,7 @@ import { Dialog, DialogPortal, DialogOverlay, DialogHeader, DialogTitle } from "
 import ProfessorRmpPanel, { type RmpPanelProf } from "@/components/ProfessorRmpPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -59,7 +60,7 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-function GradeBar({ grades }: { grades: Record<string, number> | null }) {
+export function GradeBar({ grades }: { grades: Record<string, number> | null }) {
   const total = grades ? BUCKETS.reduce((n, b) => n + (grades[b] ?? 0), 0) : 0;
   if (!grades || !total) return <span className="text-xs text-muted-foreground">No grade data</span>;
   
@@ -499,19 +500,39 @@ function courseProfessors(s: RetrievedSection): string[] {
   return Array.from(set);
 }
 
-// Shared course-detail dialog (card + RMP panel); renders nothing until `section` is set.
+function CourseDetailSkeleton() {
+  return (
+    <div className="space-y-5">
+      <DialogTitle className="sr-only">Loading course</DialogTitle>
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-6 w-2/3" />
+      </div>
+      <div className="flex gap-2">
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-24 rounded-full" />
+      </div>
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-24 w-full rounded-lg" />
+      <Skeleton className="h-12 w-full" />
+    </div>
+  );
+}
+
 export function CourseDialog({
   section,
+  loading = false,
   onClose,
 }: {
   section: RetrievedSection | null;
+  loading?: boolean;
   onClose: () => void;
 }) {
   const [rmpProf, setRmpProf] = useState<RmpPanelProf | null>(null);
 
   return (
     <Dialog
-      open={!!section}
+      open={!!section || loading}
       onOpenChange={(open) => {
         if (!open) {
           onClose();
@@ -529,14 +550,16 @@ export function CourseDialog({
             {/* Course card */}
             <div className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
               <div className="max-h-[85vh] overflow-y-auto p-6">
-                {section && (
+                {section ? (
                   <CourseDetail
                     s={section}
                     onOpenRmp={(prof) =>
                       setRmpProf((cur) => (cur?.legacyId === prof.legacyId ? null : prof))
                     }
                   />
-                )}
+                ) : loading ? (
+                  <CourseDetailSkeleton />
+                ) : null}
               </div>
               <DialogPrimitive.Close className="absolute right-4 top-4 z-10 cursor-pointer rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
                 <X className="h-4 w-4" />

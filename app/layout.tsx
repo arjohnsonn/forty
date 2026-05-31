@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/server";
 import Navbar from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
 import { SchedulesProvider } from "@/lib/schedules";
+import ClientErrorGuard from "@/components/client-error-guard";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -46,6 +47,7 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ClientErrorGuard />
           {user ? (
             <Sidebar
               userEmail={user.email ?? ""}

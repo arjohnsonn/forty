@@ -12,6 +12,8 @@ import {
   Menu,
   Sheet,
   School,
+  BookOpen,
+  Users,
   PanelRightOpen,
   PanelRightClose,
   Trash2,
@@ -237,12 +239,17 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
           isMobile && mobileOpen && "translate-x-0 transform shadow-lg"
         )}
       >
-        <div className="flex items-center justify-center border-b border-b-foreground/10 p-4 pt-5">
+        <Link
+          href="/"
+          onClick={() => window.dispatchEvent(new Event("forty:new-chat"))}
+          className="flex items-center justify-center border-b border-b-foreground/10 p-4 pt-5 transition-colors hover:text-zinc-400"
+          title="New chat"
+        >
           <GraduationCap className="h-5 w-5 flex-shrink-0" />
           <h1 className="ml-2 overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
             Forty
           </h1>
-        </div>
+        </Link>
 
         <div className="flex-1 overflow-y-auto p-2">
           <Section>
@@ -260,6 +267,18 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
               icon={<CalendarDays className="h-4 w-4" />}
               text="Calendar"
               active={pathname === "/calendar"}
+            />
+            <SidebarItem
+              href="/courses"
+              icon={<BookOpen className="h-4 w-4" />}
+              text="Courses"
+              active={pathname === "/courses"}
+            />
+            <SidebarItem
+              href="/professors"
+              icon={<Users className="h-4 w-4" />}
+              text="Professors"
+              active={pathname === "/professors"}
             />
           </Section>
 
@@ -324,7 +343,7 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
 
           <Section title="Resources">
             <SidebarItem
-              href="https://utdirect.utexas.edu/apps/registrar/course_schedule/20259/"
+              href="https://utdirect.utexas.edu/apps/registrar/course_schedule/20269/"
               icon={<Calendar className="h-4 w-4" />}
               text="Course Schedule"
               target="_blank"

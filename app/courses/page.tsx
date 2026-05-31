@@ -1,0 +1,14 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/utils/supabase/server";
+import CoursesView from "@/components/CoursesView";
+
+export default async function CoursesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return redirect("/sign-in");
+
+  return <CoursesView />;
+}
