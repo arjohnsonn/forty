@@ -10,6 +10,7 @@ import {
   courseColor,
   colorAt,
   minuteLabel,
+  assignLanes,
   scheduleSectionToRetrieved,
   type ScheduleSection,
   type CourseColor,
@@ -42,40 +43,6 @@ type Block = {
 };
 
 type BlockInstance = { block: TimeBlock; dayIdx: number };
-
-// Side-by-side lanes for time-ranged items (courses + time blocks share a day's width, GCal-style).
-function assignLanes<T extends { startMin: number; endMin: number }>(
-  items: T[]
-): Array<T & { lane: number; lanes: number }> {
-  const sorted = items
-    .slice()
-    .sort((a, z) => a.startMin - z.startMin || a.endMin - z.endMin)
-    .map((x) => ({ ...x, lane: 0, lanes: 1 }));
-  let i = 0;
-  while (i < sorted.length) {
-    let end = i + 1;
-    let maxEnd = sorted[i]!.endMin;
-    while (end < sorted.length && sorted[end]!.startMin < maxEnd) {
-      maxEnd = Math.max(maxEnd, sorted[end]!.endMin);
-      end++;
-    }
-    const cluster = sorted.slice(i, end);
-    const laneEnds: number[] = [];
-    for (const b of cluster) {
-      let lane = laneEnds.findIndex((e) => e <= b.startMin);
-      if (lane === -1) {
-        lane = laneEnds.length;
-        laneEnds.push(b.endMin);
-      } else {
-        laneEnds[lane] = b.endMin;
-      }
-      b.lane = lane;
-    }
-    for (const b of cluster) b.lanes = laneEnds.length;
-    i = end;
-  }
-  return sorted;
-}
 
 export default function WeeklyGrid({
   sections,
@@ -274,16 +241,11 @@ export default function WeeklyGrid({
   }
 
   const blockInstances: BlockInstance[] = [];
-  const blockDays: number[] = [];
   for (const tb of timeBlocks) {
-    for (const d of tb.days) {
-      blockInstances.push({ block: tb, dayIdx: d });
-      blockDays.push(d);
-    }
+    for (const d of tb.days) blockInstances.push({ block: tb, dayIdx: d });
   }
 
-  const maxDay = Math.max(4, ...courseBlocks.map((b) => b.dayIdx).concat(blockDays));
-  const days = Array.from({ length: maxDay + 1 }, (_, i) => i);
+  const days = Array.from({ length: 7 }, (_, i) => i); // Mon–Sun
 
   const totalHeight = (DAY_MIN / 60) * HOUR_PX;
   const hours = Array.from({ length: 25 }, (_, i) => i);
@@ -340,7 +302,7 @@ export default function WeeklyGrid({
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex min-h-0 flex-1 flex-col overflow-x-auto rounded-lg border">
-        <div className="flex min-h-0 min-w-[640px] flex-1 flex-col">
+        <div className="flex min-h-0 min-w-[768px] flex-1 flex-col">
           {/* Day headers (stay put while the grid scrolls vertically) */}
           <div className="flex shrink-0 border-b bg-muted/30">
             <div className="w-14 shrink-0" />

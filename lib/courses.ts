@@ -162,6 +162,58 @@ export function pickColorIndex(existing: { color?: number | null }[]): number {
   return pool[Math.floor(Math.random() * pool.length)]!;
 }
 
+// Hex palettes (Tailwind 500/300/700) parallel to COURSE_COLORS, for canvas rendering (PNG export).
+const COURSE_HEX = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f97316", "#14b8a6"];
+const COURSE_HEX_300 = ["#93c5fd", "#6ee7b7", "#c4b5fd", "#fcd34d", "#f9a8d4", "#67e8f9", "#fdba74", "#5eead4"];
+const COURSE_HEX_700 = ["#1d4ed8", "#047857", "#6d28d9", "#b45309", "#be185d", "#0e7490", "#c2410c", "#0f766e"];
+
+// A saved section's palette index (matches courseColor/colorAt).
+export function colorIndexFor(s: { color?: number | null; course_code: string }): number {
+  if (s.color != null) return ((s.color % COURSE_HEX.length) + COURSE_HEX.length) % COURSE_HEX.length;
+  let hash = 0;
+  for (let i = 0; i < s.course_code.length; i++) hash = (hash * 31 + s.course_code.charCodeAt(i)) | 0;
+  return Math.abs(hash) % COURSE_HEX.length;
+}
+
+export function courseHexShade(index: number, shade: 300 | 500 | 700): string {
+  const arr = shade === 300 ? COURSE_HEX_300 : shade === 700 ? COURSE_HEX_700 : COURSE_HEX;
+  return arr[((index % arr.length) + arr.length) % arr.length]!;
+}
+
+// Side-by-side lanes for time-ranged items (courses + time blocks share a day's width, GCal-style).
+export function assignLanes<T extends { startMin: number; endMin: number }>(
+  items: T[]
+): Array<T & { lane: number; lanes: number }> {
+  const sorted = items
+    .slice()
+    .sort((a, z) => a.startMin - z.startMin || a.endMin - z.endMin)
+    .map((x) => ({ ...x, lane: 0, lanes: 1 }));
+  let i = 0;
+  while (i < sorted.length) {
+    let end = i + 1;
+    let maxEnd = sorted[i]!.endMin;
+    while (end < sorted.length && sorted[end]!.startMin < maxEnd) {
+      maxEnd = Math.max(maxEnd, sorted[end]!.endMin);
+      end++;
+    }
+    const cluster = sorted.slice(i, end);
+    const laneEnds: number[] = [];
+    for (const b of cluster) {
+      let lane = laneEnds.findIndex((e) => e <= b.startMin);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(b.endMin);
+      } else {
+        laneEnds[lane] = b.endMin;
+      }
+      b.lane = lane;
+    }
+    for (const b of cluster) b.lanes = laneEnds.length;
+    i = end;
+  }
+  return sorted;
+}
+
 export type SemesterGrades = { semester: string; grades: Record<string, number> };
 
 export type ProfessorRating = {

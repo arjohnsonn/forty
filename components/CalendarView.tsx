@@ -1,11 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, MoreHorizontal, Pencil, Trash2, CalendarPlus, Clock } from "lucide-react";
+import {
+  Plus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  CalendarPlus,
+  CalendarDays,
+  Clock,
+  Upload,
+  FileImage,
+  FileJson,
+  FileText,
+} from "lucide-react";
 import { useSchedules, type ScheduleRow } from "@/lib/schedules";
 import WeeklyGrid from "@/components/WeeklyGrid";
 import TimePicker from "@/components/TimePicker";
 import { courseMeta } from "@/lib/courses";
+import { exportPng, exportIcs, exportJson, exportTxt } from "@/lib/schedule-export";
 
 type BlockDraft = { id?: string; label: string; days: number[]; startMin: number; endMin: number };
 
@@ -193,6 +206,34 @@ export default function CalendarView() {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {active && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Upload className="mr-1.5 h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportPng(active)}>
+                    <FileImage className="mr-2 h-4 w-4" />
+                    Save as .png
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportIcs(active)}>
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    Save as .ics
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportJson(active)}>
+                    <FileJson className="mr-2 h-4 w-4" />
+                    Save as .json
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportTxt(active)}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Save as .txt
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {active && (
               <Button size="sm" variant="outline" onClick={openBlock}>
                 <Clock className="mr-1.5 h-4 w-4" />
