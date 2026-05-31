@@ -4,15 +4,15 @@ import { SubmitButton } from "@/components/submit-button";
 export default function SignedOutLanding() {
   return (
     <div className="flex flex-1 items-center justify-center p-4">
-      <div className="flex max-w-md flex-col items-center gap-6 text-center">
-        <h1 className="text-3xl">
+      <div className="flex flex-col items-center gap-2 text-center">
+        <h1 className="whitespace-nowrap text-3xl">
           Plan your{" "}
           <span className="font-semibold text-texas">perfect UT schedule</span>
         </h1>
-        <p className="text-muted-foreground">
-          Sign in to start chatting and save your conversation history.
+        <p className="whitespace-nowrap text-muted-foreground">
+          Sign in to plan your schedule with the help of AI using UT data
         </p>
-        <form>
+        <form className="mt-6">
           <SubmitButton
             formAction={signInWithGoogleAction}
             formNoValidate
