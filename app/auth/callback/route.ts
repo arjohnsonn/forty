@@ -15,7 +15,9 @@ export async function GET(request: Request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  if (redirectTo) {
+  // Only follow same-origin relative paths so `redirect_to` can't send the user off-site
+  // (e.g. `@evil.com` would resolve to `https://site@evil.com`, i.e. host evil.com).
+  if (redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")) {
     return NextResponse.redirect(`${origin}${redirectTo}`);
   }
 

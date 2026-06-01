@@ -1487,12 +1487,14 @@ export default {
         },
       });
     } catch (err) {
+      // Keep the internal error in logs only; the response stays generic so downstream
+      // (Supabase/Gemini) error details don't leak to the client.
       console.error("Worker error:", err);
       return errorJson(
         cors,
         500,
         "Worker Error",
-        err instanceof Error ? err.message : String(err),
+        "Something went wrong handling the request. Please try again.",
       );
     }
   },
