@@ -122,7 +122,7 @@ export default function WeeklyGrid({
 
   // Drag empty space to sketch a new time block; commit on release.
   const startCreate = (e: React.PointerEvent, dayIdx: number) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || e.pointerType !== "mouse") return; // touch scrolls the grid; create via the Time Block button
     const colTop = (e.currentTarget as HTMLElement).getBoundingClientRect().top;
     const anchor = yToMin(colTop, e.clientY);
     setPreview({ dayIdx, startMin: anchor, endMin: anchor });
@@ -143,7 +143,7 @@ export default function WeeklyGrid({
 
   // Drag a block to shift its time and/or day (multi-day patterns shift together).
   const startMove = (e: React.PointerEvent, block: TimeBlock, originDay: number) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || e.pointerType !== "mouse") return; // touch scrolls; move/resize is mouse-only
     e.stopPropagation();
     const startY = e.clientY;
     const len = block.endMin - block.startMin;
@@ -179,7 +179,7 @@ export default function WeeklyGrid({
 
   // Drag a block's top/bottom edge to change its start/end (the opposite edge stays put).
   const startResize = (e: React.PointerEvent, block: TimeBlock, edge: "top" | "bottom") => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || e.pointerType !== "mouse") return;
     e.stopPropagation();
     const startY = e.clientY;
     const compute = (clientY: number) => {
@@ -362,7 +362,7 @@ export default function WeeklyGrid({
                         <div
                           key={`${it.block.id}-${d}`}
                           onPointerDown={(e) => startMove(e, it.block, d)}
-                          className="group/blk absolute cursor-grab touch-none overflow-hidden rounded-md border border-dashed border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground active:cursor-grabbing"
+                          className="group/blk absolute cursor-grab overflow-hidden rounded-md border border-dashed border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground active:cursor-grabbing"
                           style={{
                             top: (it.startMin / 60) * HOUR_PX + 1,
                             height: Math.max(((it.endMin - it.startMin) / 60) * HOUR_PX - 2, 14),
@@ -372,7 +372,7 @@ export default function WeeklyGrid({
                         >
                           <div className="flex items-start justify-between gap-1">
                             <span className="truncate font-medium">{it.block.label}</span>
-                            <span className="relative z-20 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/blk:opacity-100">
+                            <span className="relative z-20 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/blk:opacity-100 [@media(hover:none)]:opacity-100">
                               <button
                                 type="button"
                                 onPointerDown={(e) => e.stopPropagation()}
@@ -403,11 +403,11 @@ export default function WeeklyGrid({
                           </div>
                           <div
                             onPointerDown={(e) => startResize(e, it.block, "top")}
-                            className="absolute inset-x-0 top-0 z-10 h-1.5 cursor-ns-resize touch-none"
+                            className="absolute inset-x-0 top-0 z-10 h-1.5 cursor-ns-resize"
                           />
                           <div
                             onPointerDown={(e) => startResize(e, it.block, "bottom")}
-                            className="absolute inset-x-0 bottom-0 z-10 h-1.5 cursor-ns-resize touch-none"
+                            className="absolute inset-x-0 bottom-0 z-10 h-1.5 cursor-ns-resize"
                           />
                         </div>
                       )
@@ -462,7 +462,7 @@ export default function WeeklyGrid({
                           }}
                           title="Remove from schedule"
                           aria-label="Remove from schedule"
-                          className="absolute right-0.5 top-0.5 cursor-pointer rounded p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100"
+                          className="absolute right-0.5 top-0.5 cursor-pointer rounded p-0.5 opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                         >
                           <X className="h-3 w-3" />
                         </button>

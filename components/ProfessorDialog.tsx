@@ -11,6 +11,7 @@ import { useToast } from "@/components/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 import { GradeBar, CourseDialog } from "@/components/CourseChips";
 import ProfessorRmpPanel, { type RmpPanelProf } from "@/components/ProfessorRmpPanel";
+import { useIsDesktop } from "@/components/hooks/use-is-desktop";
 import { formatName, courseCode, titleCase, type RetrievedSection } from "@/lib/courses";
 import { fetchCourseDetail, type ProfessorCourse, type ProfessorProfile } from "@/lib/browse";
 
@@ -176,15 +177,17 @@ export default function ProfessorDialog({
   const [supabase] = useState(() => createClient());
   const { toast } = useToast();
   const [rmpOpen, setRmpOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   // A course opened from the "Teaches this semester" list — its detail dialog stacks over this one.
   const [courseOpenId, setCourseOpenId] = useState<number | null>(null);
   const [courseDetail, setCourseDetail] = useState<RetrievedSection | null>(null);
   const courseRef = useRef<number | null>(null);
 
-  // Auto-open the RMP panel for matched professors, and clear any open course, when the profile changes.
+  // Desktop auto-opens the RMP panel for matched profs (mobile opens it as an overlay); reset any stacked course on profile change.
   useEffect(() => {
-    setRmpOpen(!!profile?.rmpLegacyId);
+    const onDesktop = window.matchMedia("(min-width: 640px)").matches;
+    setRmpOpen(!!profile?.rmpLegacyId && onDesktop);
     courseRef.current = null;
     setCourseOpenId(null);
     setCourseDetail(null);
@@ -261,14 +264,14 @@ export default function ProfessorDialog({
             </div>
 
             <AnimatePresence>
-              {rmpOpen && rmpProf && (
+              {isDesktop && rmpOpen && rmpProf && (
                 <motion.aside
                   key="rmp-panel"
                   initial={{ opacity: 0, width: 0, x: -12 }}
                   animate={{ opacity: 1, width: 340, x: 0 }}
                   exit={{ opacity: 0, width: 0, x: -12 }}
                   transition={{ duration: 0.28, ease: "easeInOut" }}
-                  className="hidden overflow-hidden sm:block"
+                  className="overflow-hidden"
                 >
                   <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
                     <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpOpen(false)} />
@@ -276,6 +279,21 @@ export default function ProfessorDialog({
                 </motion.aside>
               )}
             </AnimatePresence>
+
+            {/* Mobile: RMP can't sit beside the card, so it opens as its own overlay */}
+            {!isDesktop && rmpOpen && rmpProf && (
+              <div
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+                onClick={() => setRmpOpen(false)}
+              >
+                <div
+                  className="w-full max-w-md overflow-hidden rounded-lg border bg-background shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpOpen(false)} />
+                </div>
+              </div>
+            )}
           </DialogPrimitive.Content>
         </div>
       </DialogPortal>

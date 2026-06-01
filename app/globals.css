@@ -90,6 +90,12 @@
   }
 }
 
+/* Wide markdown tables (chat answers) scroll instead of overflowing the viewport on phones. */
+.prose table {
+  display: block;
+  overflow-x: auto;
+}
+
 @keyframes text-shimmer {
   0% {
     background-position: 150% center;

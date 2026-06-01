@@ -58,8 +58,8 @@ const NewConvo = ({ onSubmit }: Props) => {
 
   return (
     <div className="flex-1 w-full flex items-center justify-center">
-      <div className="flex flex-col items-center gap-y-3 justify-center">
-        <h1 className="text-3xl text-center">
+      <div className="flex w-full max-w-2xl flex-col items-center justify-center gap-y-3 px-4">
+        <h1 className="text-2xl text-center sm:text-3xl">
           {parts.map((text, idx) =>
             idx % 2 === 1 ? (
               <span className="text-texas font-semibold" key={idx}>
@@ -71,7 +71,7 @@ const NewConvo = ({ onSubmit }: Props) => {
           )}
         </h1>
 
-        <div className="flex w-[95%] items-end gap-2 rounded-3xl border py-1.5 pl-4 pr-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring md:w-full">
+        <div className="flex w-full items-end gap-2 rounded-3xl border py-1.5 pl-4 pr-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring">
           <TextareaExpand
             rows={1}
             className="max-h-60 min-h-0 flex-1 resize-none self-center overflow-y-auto border-0 bg-transparent px-0 py-2 focus-visible:ring-0"

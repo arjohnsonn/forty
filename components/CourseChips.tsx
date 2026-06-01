@@ -32,6 +32,7 @@ import {
   type ProfessorRating,
 } from "@/lib/courses";
 import AddToSchedule from "@/components/AddToSchedule";
+import { useIsDesktop } from "@/components/hooks/use-is-desktop";
 
 export type { RetrievedSection, CourseSection } from "@/lib/courses";
 
@@ -557,6 +558,7 @@ export function CourseDialog({
   onClose: () => void;
 }) {
   const [rmpProf, setRmpProf] = useState<RmpPanelProf | null>(null);
+  const isDesktop = useIsDesktop();
 
   return (
     <Dialog
@@ -595,16 +597,16 @@ export function CourseDialog({
               </DialogPrimitive.Close>
             </div>
 
-            {/* RateMyProfessors detail — slides out beside the card (desktop) */}
+            {/* Desktop: RMP detail slides out beside the card */}
             <AnimatePresence>
-              {rmpProf && (
+              {isDesktop && rmpProf && (
                 <motion.aside
                   key="rmp-panel"
                   initial={{ opacity: 0, width: 0, x: -12 }}
                   animate={{ opacity: 1, width: 340, x: 0 }}
                   exit={{ opacity: 0, width: 0, x: -12 }}
                   transition={{ duration: 0.28, ease: "easeInOut" }}
-                  className="hidden overflow-hidden sm:block"
+                  className="overflow-hidden"
                 >
                   <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
                     <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpProf(null)} />
@@ -612,6 +614,21 @@ export function CourseDialog({
                 </motion.aside>
               )}
             </AnimatePresence>
+
+            {/* Mobile: RMP can't sit beside the card, so it opens as its own overlay */}
+            {!isDesktop && rmpProf && (
+              <div
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+                onClick={() => setRmpProf(null)}
+              >
+                <div
+                  className="w-full max-w-md overflow-hidden rounded-lg border bg-background shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpProf(null)} />
+                </div>
+              </div>
+            )}
           </DialogPrimitive.Content>
         </div>
       </DialogPortal>

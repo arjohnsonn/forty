@@ -641,7 +641,7 @@ function ResultCard({
   return (
     <div className="rounded-lg border bg-background p-3">
       <MiniGrid sched={sched} fixed={fixed} />
-      <div className="mt-2 flex flex-nowrap items-center gap-1 text-[11px] text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
         <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
           <span className="font-semibold">Prof:</span>{" "}
           {(sched.quality * 5).toFixed(1)}/5

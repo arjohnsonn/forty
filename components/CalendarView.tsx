@@ -165,7 +165,7 @@ export default function CalendarView() {
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="shrink-0 border-b bg-background px-4 pb-3 pl-14 pt-5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <h2 className="shrink-0 text-lg font-semibold text-foreground">Calendar</h2>
             {active && (
@@ -206,7 +206,7 @@ export default function CalendarView() {
               </>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {active && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
