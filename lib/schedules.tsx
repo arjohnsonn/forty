@@ -24,6 +24,9 @@ export type ScheduleRow = {
 type SchedulesContextValue = {
   schedules: ScheduleRow[];
   loading: boolean;
+  /** Which schedule the calendar shows. Lives here so the planner can pre-select before navigating. */
+  activeId: string | null;
+  setActiveId: (id: string | null) => void;
   createSchedule: (name: string) => Promise<ScheduleRow | null>;
   renameSchedule: (id: string, name: string) => Promise<void>;
   deleteSchedule: (id: string) => Promise<void>;
@@ -39,6 +42,8 @@ const noop = async () => {};
 const SchedulesContext = createContext<SchedulesContextValue>({
   schedules: [],
   loading: false,
+  activeId: null,
+  setActiveId: () => {},
   createSchedule: async () => null,
   renameSchedule: noop,
   deleteSchedule: noop,
@@ -77,6 +82,7 @@ export function SchedulesProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createClient());
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const fetchSchedules = useCallback(async () => {
     const { data } = await supabase
@@ -267,6 +273,8 @@ export function SchedulesProvider({ children }: { children: React.ReactNode }) {
       value={{
         schedules,
         loading,
+        activeId,
+        setActiveId,
         createSchedule,
         renameSchedule,
         deleteSchedule,

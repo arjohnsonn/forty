@@ -10,6 +10,7 @@ import {
   courseColor,
   colorAt,
   minuteLabel,
+  lastName,
   assignLanes,
   scheduleSectionToRetrieved,
   type ScheduleSection,
@@ -472,7 +473,12 @@ export default function WeeklyGrid({
                         >
                           <X className="h-3 w-3" />
                         </button>
-                        <div className="truncate font-semibold">{b.code}</div>
+                        <div className="truncate font-semibold">
+                          {b.code}
+                          {b.source.instructors?.[0]
+                            ? ` - ${lastName(b.source.instructors[0])}`
+                            : ""}
+                        </div>
                         <div className="truncate opacity-80">
                           {minuteLabel(b.startMin)}–{minuteLabel(b.endMin)}
                         </div>

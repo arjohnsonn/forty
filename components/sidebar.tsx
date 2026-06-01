@@ -9,6 +9,7 @@ import {
   CalendarDays,
   GraduationCap,
   SquarePen,
+  Wand2,
   Menu,
   Sheet,
   School,
@@ -57,7 +58,14 @@ type SidebarItemProps = {
   onClick?: () => void;
 };
 
-const SidebarItem = ({ href, icon, text, active, target, onClick }: SidebarItemProps) => (
+const SidebarItem = ({
+  href,
+  icon,
+  text,
+  active,
+  target,
+  onClick,
+}: SidebarItemProps) => (
   <Link
     href={href}
     onClick={onClick}
@@ -65,7 +73,7 @@ const SidebarItem = ({ href, icon, text, active, target, onClick }: SidebarItemP
       "flex items-center gap-3 rounded-lg px-4 py-2 transition-colors duration-150 ease-in-out",
       active
         ? "bg-texas/10 text-texas"
-        : "text-zinc-600 hover:bg-foreground/10 hover:text-foreground dark:text-zinc-400"
+        : "text-zinc-600 hover:bg-foreground/10 hover:text-foreground dark:text-zinc-400",
     )}
     title={text}
     target={target}
@@ -92,7 +100,13 @@ const Section = ({
   </div>
 );
 
-export function Sidebar({ userEmail, userName }: { userEmail: string; userName: string }) {
+export function Sidebar({
+  userEmail,
+  userName,
+}: {
+  userEmail: string;
+  userName: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -116,8 +130,10 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
         .filter((c) => !c.deleted)
         .map((c) => ({
           id: c.id as string,
-          title: (c.title as string | null)?.trim() || deriveTitle(parseMessages(c.messages)),
-        }))
+          title:
+            (c.title as string | null)?.trim() ||
+            deriveTitle(parseMessages(c.messages)),
+        })),
     );
   }, [supabase]);
 
@@ -128,7 +144,7 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversations" },
-        () => fetchConversations()
+        () => fetchConversations(),
       )
       .subscribe();
     return () => {
@@ -139,8 +155,11 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
   // Reflect a rename done from the conversation header immediately (without waiting on a refetch).
   useEffect(() => {
     const onRename = (e: Event) => {
-      const { id, title } = (e as CustomEvent<{ id: string; title: string }>).detail;
-      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+      const { id, title } = (e as CustomEvent<{ id: string; title: string }>)
+        .detail;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, title } : c)),
+      );
     };
     window.addEventListener("forty:rename", onRename);
     return () => window.removeEventListener("forty:rename", onRename);
@@ -193,9 +212,18 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
     const next = draftTitle.trim();
     setRenameTarget(null);
     if (!target || !next || next === target.title) return;
-    setConversations((prev) => prev.map((c) => (c.id === target.id ? { ...c, title: next } : c)));
-    window.dispatchEvent(new CustomEvent("forty:rename", { detail: { id: target.id, title: next } }));
-    const { error } = await supabase.from("conversations").update({ title: next }).eq("id", target.id);
+    setConversations((prev) =>
+      prev.map((c) => (c.id === target.id ? { ...c, title: next } : c)),
+    );
+    window.dispatchEvent(
+      new CustomEvent("forty:rename", {
+        detail: { id: target.id, title: next },
+      }),
+    );
+    const { error } = await supabase
+      .from("conversations")
+      .update({ title: next })
+      .eq("id", target.id);
     if (error) {
       fetchConversations();
       toast({ variant: "destructive", title: "Couldn't rename chat" });
@@ -236,7 +264,7 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
           collapsed ? "w-0 overflow-hidden" : "w-60",
           !collapsed && "border-r border-foreground/10",
           isMobile && !mobileOpen && "-translate-x-full transform",
-          isMobile && mobileOpen && "translate-x-0 transform shadow-lg"
+          isMobile && mobileOpen && "translate-x-0 transform shadow-lg",
         )}
       >
         <Link
@@ -261,6 +289,12 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
               // Reset the landing UI even when the router already thinks it's on "/" (after an
               // in-place chat start, where the URL was changed via history.replaceState).
               onClick={() => window.dispatchEvent(new Event("forty:new-chat"))}
+            />
+            <SidebarItem
+              href="/build"
+              icon={<Wand2 className="h-4 w-4" />}
+              text="Build a Schedule"
+              active={pathname === "/build"}
             />
             <SidebarItem
               href="/calendar"
@@ -293,7 +327,9 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
                     key={c.id}
                     className={cn(
                       "group relative rounded-lg transition-colors duration-150",
-                      active ? "bg-texas/10 text-texas" : "hover:bg-foreground/10"
+                      active
+                        ? "bg-texas/10 text-texas"
+                        : "hover:bg-foreground/10",
                     )}
                   >
                     <Link
@@ -301,7 +337,9 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
                       title={c.title}
                       className={cn(
                         "block truncate rounded-lg py-2 pl-4 pr-10 text-sm transition-colors duration-150",
-                        active ? "text-foreground" : "text-zinc-600 group-hover:text-foreground dark:text-zinc-400"
+                        active
+                          ? "text-foreground"
+                          : "text-zinc-600 group-hover:text-foreground dark:text-zinc-400",
                       )}
                     >
                       {c.title}
@@ -401,7 +439,10 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
         />
       )}
 
-      <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
+      <Dialog
+        open={!!renameTarget}
+        onOpenChange={(open) => !open && setRenameTarget(null)}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Rename chat</DialogTitle>
@@ -429,19 +470,26 @@ export function Sidebar({ userEmail, userName }: { userEmail: string; userName: 
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete chat?</DialogTitle>
             <DialogDescription>
-              This permanently removes “{deleteTarget?.title}”. This can’t be undone.
+              This permanently removes “{deleteTarget?.title}”. This can’t be
+              undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => deleteTarget && handleDelete(deleteTarget.id)}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
+            >
               Delete
             </Button>
           </div>

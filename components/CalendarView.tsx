@@ -53,6 +53,8 @@ export default function CalendarView() {
   const {
     schedules,
     loading,
+    activeId,
+    setActiveId,
     createSchedule,
     renameSchedule,
     deleteSchedule,
@@ -63,15 +65,14 @@ export default function CalendarView() {
     removeBlock,
   } = useSchedules();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
   const active = schedules.find((s) => s.id === activeId) ?? schedules[0] ?? null;
 
-  // Keep a valid active schedule selected as the list loads / changes.
+  // Keep a valid active schedule selected as the list loads / changes. `activeId` lives in the shared store, so the planner can pre-select the schedule it just built before navigating here.
   useEffect(() => {
     if ((!activeId || !schedules.some((s) => s.id === activeId)) && schedules[0]) {
       setActiveId(schedules[0].id);
     }
-  }, [schedules, activeId]);
+  }, [schedules, activeId, setActiveId]);
 
   const [creating, setCreating] = useState(false);
   const [draftName, setDraftName] = useState("");

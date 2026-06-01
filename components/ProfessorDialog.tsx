@@ -30,7 +30,7 @@ function RmpSummary({ profile, onOpen }: { profile: ProfessorProfile; onOpen: ()
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium">RateMyProfessors</span>
         <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
-          Ratings &amp; reviews
+          Details
           <ChevronRight className="h-3.5 w-3.5" />
         </span>
       </div>
@@ -124,7 +124,7 @@ function ProfileBody({
           <RmpSummary profile={profile} onOpen={onOpenRmp} />
         ) : (
           <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-            No RateMyProfessors profile matched — showing grade and evaluation data from past terms.
+            No RateMyProfessors profile matched. Showing grade and evaluation data from past terms.
           </p>
         )}
 

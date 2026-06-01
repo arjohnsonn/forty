@@ -14,6 +14,12 @@ export function formatName(raw: string): string {
     .join(" ");
 }
 
+/** "LEWIS, CHARLTON N" or "Charlton N Lewis" -> "Lewis" (best-effort last name). */
+export function lastName(raw: string): string {
+  const parts = formatName(raw).split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] ?? "";
+}
+
 /** "C S 303E ELEMS OF COMPUTERS" -> "C S 303E" */
 export function courseCode(header: string): string {
   const m = header.match(/^(.+?\s\d{1,3}[A-Z]*)\s/);

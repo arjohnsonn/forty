@@ -1,11 +1,25 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TextareaExpand } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowUp, Copy, RefreshCw, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  ArrowUp,
+  Copy,
+  RefreshCw,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +40,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
 import CourseChips from "@/components/CourseChips";
-import { buildCourseTime, rehypeCourseTime, makeCourseTimeComponents } from "@/lib/rehype-course-time";
+import {
+  buildCourseTime,
+  rehypeCourseTime,
+  makeCourseTimeComponents,
+} from "@/lib/rehype-course-time";
 import { messageText, deriveTitle } from "@/lib/conversations";
 
 type ConversationProps = {
@@ -48,29 +66,40 @@ const Conversation: React.FC<ConversationProps> = ({
   const router = useRouter();
   const [supabase] = useState(() => createClient());
 
-  const { messages, input, handleInputChange, handleSubmit, status, append, reload } =
-    useChat({
-      id: chatId,
-      api: process.env.NEXT_PUBLIC_CHAT_URL,
-      initialMessages,
-      // The Worker reads `chatId` to persist the conversation on finish.
-      body: { chatId },
-      sendExtraMessageFields: true,
-      onError: (response) => {
-        let errorName = "Error";
-        let errorMessage = "Something went wrong. Please try again.";
-        try {
-          const {
-            error: { name, message },
-          } = JSON.parse(response.message);
-          errorName = name;
-          errorMessage = message;
-        } catch {
-          errorMessage = response.message;
-        }
-        toast({ variant: "destructive", title: errorName, description: errorMessage });
-      },
-    });
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    status,
+    append,
+    reload,
+  } = useChat({
+    id: chatId,
+    api: process.env.NEXT_PUBLIC_CHAT_URL,
+    initialMessages,
+    // The Worker reads `chatId` to persist the conversation on finish.
+    body: { chatId },
+    sendExtraMessageFields: true,
+    onError: (response) => {
+      let errorName = "Error";
+      let errorMessage = "Something went wrong. Please try again.";
+      try {
+        const {
+          error: { name, message },
+        } = JSON.parse(response.message);
+        errorName = name;
+        errorMessage = message;
+      } catch {
+        errorMessage = response.message;
+      }
+      toast({
+        variant: "destructive",
+        title: errorName,
+        description: errorMessage,
+      });
+    },
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -79,7 +108,9 @@ const Conversation: React.FC<ConversationProps> = ({
   // Keep "Thinking…" until the assistant message has text (annotations arrive before the first token).
   const lastMessage = messages[messages.length - 1];
   const awaitingText =
-    busy && (lastMessage?.role !== "assistant" || messageText(lastMessage).trim() === "");
+    busy &&
+    (lastMessage?.role !== "assistant" ||
+      messageText(lastMessage).trim() === "");
 
   const [title, setTitle] = useState(initialTitle);
   const [renaming, setRenaming] = useState(false);
@@ -92,20 +123,30 @@ const Conversation: React.FC<ConversationProps> = ({
     setRenaming(false);
     if (!next || next === displayTitle) return;
     setTitle(next);
-    window.dispatchEvent(new CustomEvent("forty:rename", { detail: { id: chatId, title: next } }));
-    const { error } = await supabase.from("conversations").update({ title: next }).eq("id", chatId);
+    window.dispatchEvent(
+      new CustomEvent("forty:rename", { detail: { id: chatId, title: next } }),
+    );
+    const { error } = await supabase
+      .from("conversations")
+      .update({ title: next })
+      .eq("id", chatId);
     if (error) toast({ variant: "destructive", title: "Couldn't rename chat" });
   };
 
   const handleDelete = async () => {
     setConfirmingDelete(false);
-    const { error } = await supabase.from("conversations").update({ deleted: true }).eq("id", chatId);
+    const { error } = await supabase
+      .from("conversations")
+      .update({ deleted: true })
+      .eq("id", chatId);
     if (error) {
       toast({ variant: "destructive", title: "Couldn't delete chat" });
       return;
     }
     // Event resets the in-place landing view (router desynced); push navigates the real route.
-    window.dispatchEvent(new CustomEvent("forty:deleted", { detail: { id: chatId } }));
+    window.dispatchEvent(
+      new CustomEvent("forty:deleted", { detail: { id: chatId } }),
+    );
     router.push("/");
   };
 
@@ -135,7 +176,9 @@ const Conversation: React.FC<ConversationProps> = ({
   // Reflect a rename done elsewhere (e.g. the sidebar's 3-dot menu) in the header title.
   useEffect(() => {
     const onRename = (e: Event) => {
-      const { id, title: next } = (e as CustomEvent<{ id: string; title: string }>).detail;
+      const { id, title: next } = (
+        e as CustomEvent<{ id: string; title: string }>
+      ).detail;
       if (id === chatId) setTitle(next);
     };
     window.addEventListener("forty:rename", onRename);
@@ -174,7 +217,9 @@ const Conversation: React.FC<ConversationProps> = ({
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
         <div className="flex items-center justify-between gap-2 bg-background pb-4 pl-14 pr-3 pt-5">
-          <h2 className="truncate text-lg font-semibold text-foreground">{displayTitle}</h2>
+          <h2 className="truncate text-lg font-semibold text-foreground">
+            {displayTitle}
+          </h2>
           <DropdownMenu>
             <DropdownMenuTrigger className="pointer-events-auto shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none">
               <MoreHorizontal className="h-4 w-4" />
@@ -320,7 +365,10 @@ const Conversation: React.FC<ConversationProps> = ({
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setConfirmingDelete(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmingDelete(false)}
+            >
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
@@ -333,7 +381,9 @@ const Conversation: React.FC<ConversationProps> = ({
   );
 };
 
-type MdRehypePlugins = React.ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+type MdRehypePlugins = React.ComponentProps<
+  typeof ReactMarkdown
+>["rehypePlugins"];
 
 function AssistantMessage({
   message,
@@ -351,27 +401,35 @@ function AssistantMessage({
   const text = messageText(message);
   const { matches, sectionByKey } = useMemo(
     () => buildCourseTime(message.annotations),
-    [message.annotations]
+    [message.annotations],
   );
   // Defer the inline (+) until streaming finishes (avoids flicker + partial-time matches).
   const components = useMemo(
     () => (streaming ? undefined : makeCourseTimeComponents(sectionByKey)),
-    [streaming, sectionByKey]
+    [streaming, sectionByKey],
   );
   const rehypePlugins = useMemo<MdRehypePlugins>(
     () => (streaming ? [] : [[rehypeCourseTime, { matches }]]),
-    [streaming, matches]
+    [streaming, matches],
   );
 
   return (
     <div className="space-y-2">
       <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={components}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={rehypePlugins}
+          components={components}
+        >
           {text}
         </ReactMarkdown>
-        {text.trim().length > 0 && <CourseChips annotations={message.annotations} />}
+        {text.trim().length > 0 && (
+          <CourseChips annotations={message.annotations} />
+        )}
       </div>
-      {showActions && <MessageActions onCopy={onCopy} onRegenerate={onRegenerate} />}
+      {showActions && (
+        <MessageActions onCopy={onCopy} onRegenerate={onRegenerate} />
+      )}
     </div>
   );
 }

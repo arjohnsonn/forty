@@ -67,7 +67,7 @@ const NewConvo = ({ onSubmit }: Props) => {
               </span>
             ) : (
               text
-            )
+            ),
           )}
         </h1>
 
@@ -95,7 +95,7 @@ const NewConvo = ({ onSubmit }: Props) => {
             variant="outline"
             onClick={() => {
               const textarea = document.querySelector(
-                'textarea[name="query"]'
+                'textarea[name="query"]',
               ) as HTMLTextAreaElement | null;
               if (!textarea || !textarea.value.trim()) return;
               const query = textarea.value.trim();
@@ -116,7 +116,7 @@ const NewConvo = ({ onSubmit }: Props) => {
               variant="outline"
               onClick={() => {
                 const textarea = document.querySelector(
-                  'textarea[name="query"]'
+                  'textarea[name="query"]',
                 ) as HTMLTextAreaElement | null;
                 if (!textarea) return;
                 textarea.value = btn.value;

@@ -8,6 +8,7 @@ import {
   streamText,
   tool,
   type CoreMessage,
+  type JSONValue,
 } from "ai";
 
 // Cloudflare's native rate-limiting binding (configured in wrangler.jsonc).
@@ -62,8 +63,7 @@ async function embedQuery(text: string, apiKey: string): Promise<number[]> {
 // re-matching), short-cached at the edge, so a freshly-posted rating shows up without a re-scrape.
 const RMP_GQL = "https://www.ratemyprofessors.com/graphql";
 const RMP_AUTH = "Basic dGVzdDp0ZXN0"; // public hardcoded RMP web credential (test:test)
-const RMP_NODE_QUERY =
-  `query($id: ID!){ node(id: $id){ ... on Teacher { avgRating avgDifficulty numRatings wouldTakeAgainPercent } } }`;
+const RMP_NODE_QUERY = `query($id: ID!){ node(id: $id){ ... on Teacher { avgRating avgDifficulty numRatings wouldTakeAgainPercent } } }`;
 
 type RmpLive = {
   rmpRating: number;
@@ -86,7 +86,9 @@ const MIN_COURSE_RATINGS = 3;
 
 // "CH 302 PRINCIPLES OF CHEMISTRY" -> "CH302" (RMP's free-text class form, used as courseFilter).
 const rmpCourseCode = (header: string): string =>
-  (header.match(/^(.+?\s\d{1,3}[A-Z]*)(?:\s|$)/)?.[1] ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  (header.match(/^(.+?\s\d{1,3}[A-Z]*)(?:\s|$)/)?.[1] ?? "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
 
 // Current RMP numbers for one professor by legacyId. Edge-cached; null on miss/error/timeout (snapshot values are the fallback).
 async function fetchRmpLive(
@@ -95,7 +97,9 @@ async function fetchRmpLive(
   ctx: ExecutionContext,
 ): Promise<RmpLive | null> {
   const cache = caches.default;
-  const cacheKey = new Request(`https://rmp-cache.internal/teacher/${legacyId}`);
+  const cacheKey = new Request(
+    `https://rmp-cache.internal/teacher/${legacyId}`,
+  );
   const hit = await cache.match(cacheKey);
   if (hit) {
     try {
@@ -124,7 +128,8 @@ async function fetchRmpLive(
       rmpDifficulty: node.avgDifficulty,
       rmpNumRatings: node.numRatings,
       rmpWouldTakeAgain:
-        typeof node.wouldTakeAgainPercent === "number" && node.wouldTakeAgainPercent >= 0
+        typeof node.wouldTakeAgainPercent === "number" &&
+        node.wouldTakeAgainPercent >= 0
           ? node.wouldTakeAgainPercent
           : null,
     };
@@ -132,7 +137,10 @@ async function fetchRmpLive(
       cache.put(
         cacheKey,
         new Response(JSON.stringify(live), {
-          headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` },
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `max-age=${ttl}`,
+          },
         }),
       ),
     );
@@ -145,6 +153,14 @@ async function fetchRmpLive(
 }
 
 // That professor's RMP rating from reviews of one course (RMP's free-text class code). Edge-cached incl. negatives; null below MIN_COURSE_RATINGS or on miss/error/timeout.
+// One review node from RMP's `ratings` GraphQL connection.
+type RmpRatingNode = {
+  clarityRating: number;
+  helpfulRating: number;
+  difficultyRating: number;
+  wouldTakeAgain: number | null;
+};
+
 async function fetchRmpCourse(
   legacyId: number,
   code: string,
@@ -154,7 +170,9 @@ async function fetchRmpCourse(
   const safe = code.replace(/[^A-Z0-9]/gi, "").toUpperCase();
   if (!safe) return null;
   const cache = caches.default;
-  const cacheKey = new Request(`https://rmp-cache.internal/teacher/${legacyId}/course/${safe}`);
+  const cacheKey = new Request(
+    `https://rmp-cache.internal/teacher/${legacyId}/course/${safe}`,
+  );
   const hit = await cache.match(cacheKey);
   if (hit) {
     try {
@@ -168,7 +186,10 @@ async function fetchRmpCourse(
       cache.put(
         cacheKey,
         new Response(JSON.stringify(value), {
-          headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttl}` },
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `max-age=${ttl}`,
+          },
         }),
       ),
     );
@@ -186,21 +207,45 @@ async function fetchRmpCourse(
       signal: controller.signal,
     });
     if (!res.ok) return null;
-    const edges = ((await res.json()) as any)?.data?.node?.ratings?.edges ?? [];
-    const reviews = edges.map((e: any) => e?.node).filter(Boolean);
+    const edges: { node?: RmpRatingNode | null }[] =
+      (
+        (await res.json()) as {
+          data?: {
+            node?: { ratings?: { edges?: { node?: RmpRatingNode | null }[] } };
+          };
+        }
+      )?.data?.node?.ratings?.edges ?? [];
+    const reviews = edges
+      .map((e) => e?.node)
+      .filter((n): n is RmpRatingNode => !!n);
     if (reviews.length < MIN_COURSE_RATINGS) {
       store(null);
       return null;
     }
     const avg = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
-    const answered = reviews.filter((r: any) => r.wouldTakeAgain === 0 || r.wouldTakeAgain === 1);
+    const answered = reviews.filter(
+      (r) => r.wouldTakeAgain === 0 || r.wouldTakeAgain === 1,
+    );
     const result: RmpCourse = {
       code: safe,
       // RMP "quality" per review is the mean of its clarity + helpfulness sub-scores.
-      rating: Math.round(avg(reviews.map((r: any) => (Number(r.clarityRating) + Number(r.helpfulRating)) / 2)) * 10) / 10,
-      difficulty: Math.round(avg(reviews.map((r: any) => Number(r.difficultyRating))) * 10) / 10,
+      rating:
+        Math.round(
+          avg(
+            reviews.map(
+              (r) => (Number(r.clarityRating) + Number(r.helpfulRating)) / 2,
+            ),
+          ) * 10,
+        ) / 10,
+      difficulty:
+        Math.round(
+          avg(reviews.map((r) => Number(r.difficultyRating))) * 10,
+        ) / 10,
       wouldTakeAgain: answered.length
-        ? Math.round((100 * answered.filter((r: any) => r.wouldTakeAgain === 1).length) / answered.length)
+        ? Math.round(
+            (100 * answered.filter((r) => r.wouldTakeAgain === 1).length) /
+              answered.length,
+          )
         : null,
       numRatings: reviews.length,
     };
@@ -234,7 +279,11 @@ async function refreshRmpLive(
   const overall = new Map<number, RmpLive>();
   const perCourse = new Map<string, RmpCourse | null>();
   const courseKeys = new Map<string, { legacyId: number; code: string }>();
-  for (const t of courseTasks) courseKeys.set(`${t.legacyId}|${t.code}`, { legacyId: t.legacyId, code: t.code });
+  for (const t of courseTasks)
+    courseKeys.set(`${t.legacyId}|${t.code}`, {
+      legacyId: t.legacyId,
+      code: t.code,
+    });
 
   await Promise.all([
     ...[...ids].map(async (id) => {
@@ -260,6 +309,15 @@ async function refreshRmpLive(
 const RMP_SCHOOL = btoa("School-1255"); // The University of Texas at Austin
 const HONORIFICS = new Set(["dr", "prof", "professor", "mr", "ms", "mrs"]);
 
+// One teacher node from RMP's `newSearch.teachers` GraphQL connection.
+type RmpTeacherNode = {
+  legacyId: number | null;
+  firstName: string;
+  lastName: string;
+  department: string | null;
+  numRatings: number | null;
+};
+
 type RmpMatch = { legacyId: number; name: string; department: string | null };
 
 // Best-effort RMP profile for a free-text professor name (UT-scoped). Prefers an exact first+last token match, else the most-rated candidate. Null when RMP returns nothing.
@@ -277,17 +335,34 @@ async function searchRmpTeacher(name: string): Promise<RmpMatch | null> {
       signal: controller.signal,
     });
     if (!res.ok) return null;
-    const nodes = (((await res.json()) as any)?.data?.newSearch?.teachers?.edges ?? [])
-      .map((e: any) => e?.node)
-      .filter((n: any) => n?.legacyId != null);
+    const edges: { node?: RmpTeacherNode | null }[] =
+      (
+        (await res.json()) as {
+          data?: {
+            newSearch?: {
+              teachers?: { edges?: { node?: RmpTeacherNode | null }[] };
+            };
+          };
+        }
+      )?.data?.newSearch?.teachers?.edges ?? [];
+    const nodes = edges
+      .map((e) => e?.node)
+      .filter(
+        (n): n is RmpTeacherNode & { legacyId: number } => n?.legacyId != null,
+      );
     if (!nodes.length) return null;
-    const tokens = name.toLowerCase().split(/[\s,]+/).filter(Boolean);
-    const fullName = (n: any) => `${n.firstName} ${n.lastName}`.toLowerCase();
-    // Prefer exact first+last token matches; among those (RMP has duplicate profiles) take the
-    // most-rated — the canonical one. Fall back to the most-rated of all candidates.
-    const exacts = nodes.filter((n: any) => tokens.every((t: string) => fullName(n).includes(t)));
+    const tokens = name
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .filter(Boolean);
+    const fullName = (n: RmpTeacherNode) =>
+      `${n.firstName} ${n.lastName}`.toLowerCase();
+    // Prefer exact first+last token matches; among those (RMP has duplicate profiles) take the most-rated (the canonical one). Fall back to the most-rated of all candidates.
+    const exacts = nodes.filter((n) =>
+      tokens.every((t) => fullName(n).includes(t)),
+    );
     const pick = (exacts.length ? exacts : [...nodes]).sort(
-      (a: any, b: any) => (b.numRatings ?? 0) - (a.numRatings ?? 0),
+      (a, b) => (b.numRatings ?? 0) - (a.numRatings ?? 0),
     )[0];
     return {
       legacyId: pick.legacyId,
@@ -317,10 +392,17 @@ async function resolveProfessor(
       .select("name, rmp_legacy_id, rmp_department")
       .not("rmp_legacy_id", "is", null);
     for (const t of tokens) q = q.ilike("name", `%${t}%`);
-    const { data } = await q.order("rmp_num_ratings", { ascending: false, nullsFirst: false }).limit(1);
+    const { data } = await q
+      .order("rmp_num_ratings", { ascending: false, nullsFirst: false })
+      .limit(1);
     const row: any = (data as any)?.[0];
     if (row?.rmp_legacy_id != null)
-      return { legacyId: row.rmp_legacy_id, name: row.name, department: row.rmp_department ?? null, source: "db" };
+      return {
+        legacyId: row.rmp_legacy_id,
+        name: row.name,
+        department: row.rmp_department ?? null,
+        source: "db",
+      };
   }
   const rmp = await searchRmpTeacher(name);
   return rmp ? { ...rmp, source: "rmp" } : null;
@@ -552,21 +634,27 @@ export default {
         const rmpByInstructor = new Map<string, unknown>();
         for (const g of group) {
           for (const ig of (g.instructor_grades as any[]) ?? [])
-            if (!igByInstructor.has(ig.instructor)) igByInstructor.set(ig.instructor, ig);
+            if (!igByInstructor.has(ig.instructor))
+              igByInstructor.set(ig.instructor, ig);
           for (const e of (g.evaluations as any[]) ?? []) {
             const k = e.instructor ?? e.cesLink;
             if (k && !evByKey.has(k)) evByKey.set(k, e);
           }
           for (const p of (g.professor_ratings as any[]) ?? [])
-            if (p?.instructor && !rmpByInstructor.has(p.instructor)) rmpByInstructor.set(p.instructor, p);
+            if (p?.instructor && !rmpByInstructor.has(p.instructor))
+              rmpByInstructor.set(p.instructor, p);
         }
         return {
           similarity: typeof similarity === "number" ? similarity : 0,
           section: {
             ...rep,
-            instructor_grades: igByInstructor.size ? [...igByInstructor.values()] : rep.instructor_grades,
+            instructor_grades: igByInstructor.size
+              ? [...igByInstructor.values()]
+              : rep.instructor_grades,
             evaluations: evByKey.size ? [...evByKey.values()] : rep.evaluations,
-            professor_ratings: rmpByInstructor.size ? [...rmpByInstructor.values()] : rep.professor_ratings,
+            professor_ratings: rmpByInstructor.size
+              ? [...rmpByInstructor.values()]
+              : rep.professor_ratings,
             course_sections: group.map((g) => ({
               section_id: g.section_id,
               instructors: g.instructors,
@@ -585,26 +673,34 @@ export default {
       const norm = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, "");
       const queryNorm = norm(message);
       const explicit = ranked.filter((r) => {
-        const header = (r.section as Record<string, unknown>).course_header as string;
+        const header = (r.section as Record<string, unknown>)
+          .course_header as string;
         const code = norm(courseCodeOf(header));
         return code.length >= 4 && queryNorm.includes(code);
       });
       let chosen = explicit;
       if (chosen.length === 0) {
         const topSimilarity = ranked[0]?.similarity ?? 0;
-        chosen = ranked.filter((r, i) => i === 0 || topSimilarity - r.similarity <= MATCH_MARGIN);
+        chosen = ranked.filter(
+          (r, i) => i === 0 || topSimilarity - r.similarity <= MATCH_MARGIN,
+        );
       }
       // Only surface courses when the question is actually about courses. Meta/conversational
       // questions ("what did I just ask") top out around 0.60 similarity; real course queries are
       // ~0.64+, so below this we show no chips and give the model no sections.
       const COURSE_MIN_SIMILARITY = 0.62;
-      const aboutCourses = (ranked[0]?.similarity ?? 0) >= COURSE_MIN_SIMILARITY;
+      const aboutCourses =
+        (ranked[0]?.similarity ?? 0) >= COURSE_MIN_SIMILARITY;
       const cleanSections = aboutCourses ? chosen.map((r) => r.section) : [];
 
       // Swap the snapshot RMP numbers for live ones (edge-cached) before they reach the model + UI.
       if (cleanSections.length > 0) {
         const rmpTtl = env.RMP_CACHE_TTL ? Number(env.RMP_CACHE_TTL) : 3600;
-        await refreshRmpLive(cleanSections as Record<string, unknown>[], rmpTtl, ctx);
+        await refreshRmpLive(
+          cleanSections as Record<string, unknown>[],
+          rmpTtl,
+          ctx,
+        );
       }
 
       const injectedSections =
@@ -637,26 +733,36 @@ export default {
               getProfessorRating: tool({
                 description:
                   "Look up a professor's RateMyProfessors ratings — overall, or for a specific course using ALL of that professor's reviews for it (including courses they are NOT teaching this semester). Use whenever the user names a specific professor and asks about their RMP rating/difficulty, or wants to compare a professor across courses. Pass the course code (e.g. M408C, CH302) when the question is course-specific. Do not say RMP data is unavailable without calling this first.",
-                parameters: jsonSchema<{ professor: string; course?: string }>({
+                parameters: jsonSchema<{
+                  professor: string;
+                  course?: string;
+                }>({
                   type: "object",
                   properties: {
                     professor: {
                       type: "string",
-                      description: "Professor name as the user wrote it, e.g. 'Eric Staron' or 'Staron'.",
+                      description:
+                        "Professor name as the user wrote it, e.g. 'Eric Staron' or 'Staron'.",
                     },
                     course: {
                       type: "string",
-                      description: "Optional course code, e.g. 'M408C' or 'CH 302'. Omit for the overall rating.",
+                      description:
+                        "Optional course code, e.g. 'M408C' or 'CH 302'. Omit for the overall rating.",
                     },
                   },
                   required: ["professor"],
                   additionalProperties: false,
                 }),
                 execute: async ({ professor, course }) => {
-                  const ttl = env.RMP_CACHE_TTL ? Number(env.RMP_CACHE_TTL) : 3600;
+                  const ttl = env.RMP_CACHE_TTL
+                    ? Number(env.RMP_CACHE_TTL)
+                    : 3600;
                   const who = await resolveProfessor(supabase, professor);
                   if (!who)
-                    return { found: false, message: `No RateMyProfessors profile found for "${professor}" at UT Austin.` };
+                    return {
+                      found: false,
+                      message: `No RateMyProfessors profile found for "${professor}" at UT Austin.`,
+                    };
                   const overall = await fetchRmpLive(who.legacyId, ttl, ctx);
                   const out: Record<string, unknown> = {
                     found: true,
@@ -673,7 +779,12 @@ export default {
                       : null,
                   };
                   if (course && course.trim()) {
-                    const c = await fetchRmpCourse(who.legacyId, course, ttl, ctx);
+                    const c = await fetchRmpCourse(
+                      who.legacyId,
+                      course,
+                      ttl,
+                      ctx,
+                    );
                     out.course = c
                       ? {
                           code: c.code,
@@ -683,7 +794,9 @@ export default {
                           numRatings: c.numRatings,
                         }
                       : {
-                          code: course.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
+                          code: course
+                            .replace(/[^A-Za-z0-9]/g, "")
+                            .toUpperCase(),
                           available: false,
                           note: `Fewer than ${MIN_COURSE_RATINGS} RateMyProfessors reviews for this professor in this course — use the overall rating instead.`,
                         };
@@ -705,19 +818,29 @@ export default {
                   typeof m.content === "string"
                     ? m.content
                     : Array.isArray(m.content)
-                      ? m.content.map((p: any) => (p?.type === "text" ? p.text : "")).join(" ")
+                      ? m.content
+                          .map((p: { type?: string; text?: string }) =>
+                            p?.type === "text" ? (p.text ?? "") : "",
+                          )
+                          .join(" ")
                       : "",
                 )
                 .join(" ");
               const answerNorm = norm(answerText);
-              const mentioned = (cleanSections as Record<string, unknown>[]).filter((s) => {
+              const mentioned = (
+                cleanSections as Record<string, unknown>[]
+              ).filter((s) => {
                 const codeNorm = norm(courseCodeOf(s.course_header as string));
                 return codeNorm.length >= 4 && answerNorm.includes(codeNorm);
               });
-              const shownSections = mentioned.length > 0 ? mentioned : cleanSections;
+              const shownSections =
+                mentioned.length > 0 ? mentioned : cleanSections;
 
               if (shownSections.length > 0) {
-                dataStream.writeMessageAnnotation({ type: "courses", sections: shownSections } as any);
+                dataStream.writeMessageAnnotation({
+                  type: "courses",
+                  sections: shownSections,
+                } as unknown as JSONValue);
               }
 
               // Only logged-in users persist conversations.
@@ -729,7 +852,9 @@ export default {
               // Re-attach the annotation (not in response.messages) so reloads keep the chips.
               const last = saved[saved.length - 1] as any;
               if (last && shownSections.length > 0) {
-                last.annotations = [{ type: "courses", sections: shownSections }];
+                last.annotations = [
+                  { type: "courses", sections: shownSections },
+                ];
               }
               const { error } = await supabase
                 .from("conversations")

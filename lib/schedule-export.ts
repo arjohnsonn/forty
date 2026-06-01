@@ -41,14 +41,14 @@ export function exportTxt(s: ExportSchedule) {
     for (const m of sec.meetings) {
       const r = parseHourRange(m.hours);
       const time = r ? `${minuteLabel(r.startMin)}–${minuteLabel(r.endMin)}` : m.hours || "TBA";
-      lines.push(`  ${m.days || "—"} ${time}${m.location ? ` · ${m.location}` : ""}`);
+      lines.push(`  ${m.days || "TBA"} ${time}${m.location ? ` · ${m.location}` : ""}`);
     }
     lines.push("");
   }
   if (s.blocks.length) {
     lines.push("Time blocks:");
     for (const b of s.blocks) {
-      lines.push(`  ${b.label} — ${b.days.map((d) => DAY_CODES[d]).join("")} ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}`);
+      lines.push(`  ${b.label}: ${b.days.map((d) => DAY_CODES[d]).join("")} ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}`);
     }
   }
   download(lines.join("\n"), `${slug(s.name)}.txt`);

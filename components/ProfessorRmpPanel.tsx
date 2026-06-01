@@ -258,12 +258,12 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
               <div className="grid grid-cols-2 gap-3">
                 <RmpBox
                   label="Quality"
-                  value={data.overall.rating?.toFixed(1) ?? "—"}
+                  value={data.overall.rating?.toFixed(1) ?? "N/A"}
                   bg={qualityColor(data.overall.rating)}
                 />
                 <RmpBox
                   label="Difficulty"
-                  value={data.overall.difficulty?.toFixed(1) ?? "—"}
+                  value={data.overall.difficulty?.toFixed(1) ?? "N/A"}
                   bg={difficultyColor(data.overall.difficulty)}
                 />
               </div>
