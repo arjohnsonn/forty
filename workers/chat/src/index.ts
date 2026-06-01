@@ -10,6 +10,16 @@ import {
   type CoreMessage,
   type JSONValue,
 } from "ai";
+// Pure (no React/Supabase) schedule logic + parsing, shared with the Next app. The Worker bundles
+// these via esbuild — see lib/scheduler.ts ("…and, later, inside the chat Worker").
+import { generateSchedules, type SchedulerPrefs } from "../../../lib/scheduler";
+import {
+  courseCode,
+  formatName,
+  formatHours,
+  minuteLabel,
+  type RetrievedSection,
+} from "../../../lib/courses";
 
 // Cloudflare's native rate-limiting binding (configured in wrangler.jsonc).
 interface RateLimit {
@@ -63,13 +73,16 @@ async function embedQuery(text: string, apiKey: string): Promise<number[]> {
 // re-matching), short-cached at the edge, so a freshly-posted rating shows up without a re-scrape.
 const RMP_GQL = "https://www.ratemyprofessors.com/graphql";
 const RMP_AUTH = "Basic dGVzdDp0ZXN0"; // public hardcoded RMP web credential (test:test)
-const RMP_NODE_QUERY = `query($id: ID!){ node(id: $id){ ... on Teacher { avgRating avgDifficulty numRatings wouldTakeAgainPercent } } }`;
+const RMP_NODE_QUERY = `query($id: ID!){ node(id: $id){ ... on Teacher { avgRating avgDifficulty numRatings wouldTakeAgainPercent teacherRatingTags { tagName tagCount } } } }`;
 
 type RmpLive = {
   rmpRating: number;
   rmpDifficulty: number;
   rmpNumRatings: number;
   rmpWouldTakeAgain: number | null;
+  // The labels students apply most often (e.g. "Tough grader"), highest-count first — same source
+  // as the professor card's "Top tags". Empty when the professor has none.
+  rmpTags: string[];
 };
 
 // A professor's RMP rating computed from reviews of one specific course (vs. their blended overall).
@@ -132,6 +145,13 @@ async function fetchRmpLive(
         node.wouldTakeAgainPercent >= 0
           ? node.wouldTakeAgainPercent
           : null,
+      rmpTags: Array.isArray(node.teacherRatingTags)
+        ? [...node.teacherRatingTags]
+            .filter((t: any) => t?.tagName)
+            .sort((a: any, b: any) => (b.tagCount ?? 0) - (a.tagCount ?? 0))
+            .slice(0, 6)
+            .map((t: any) => String(t.tagName))
+        : [],
     };
     ctx.waitUntil(
       cache.put(
@@ -453,7 +473,10 @@ const SYSTEM_PROMPT =
   `rmpRating and rmpDifficulty out of 5, rmpWouldTakeAgain as a percentage, and rmpNumRatings — these are ` +
   `student-submitted ratings from RateMyProfessors, separate from the official CES evaluations; call them ` +
   `"RateMyProfessors" so the two aren't confused, and if a professor has no professor_ratings entry or ` +
-  `rmpNumRatings is 0, don't cite an RMP score). A professor_ratings entry may also include rmpCourse — ` +
+  `rmpNumRatings is 0, don't cite an RMP score). A professor_ratings entry may also include rmpTags — the ` +
+  `labels students most often apply to that professor on RateMyProfessors (e.g. "Tough grader", "Test heavy", ` +
+  `"Caring") — weave a few in when describing what a professor is like, but never present them as official ` +
+  `evaluations. An entry may also include rmpCourse — ` +
   `that same professor's RateMyProfessors rating computed only from reviews of THIS course (rmpCourse.code), ` +
   `with rmpCourse.rating and rmpCourse.difficulty out of 5, rmpCourse.wouldTakeAgain percent, and ` +
   `rmpCourse.numRatings reviews. When the question is about that specific course, prefer rmpCourse over the ` +
@@ -470,9 +493,125 @@ const SYSTEM_PROMPT =
   `course, 4 = a 4-credit course), and the second and third digits give the level — 01–19 is lower-division ` +
   `(freshman-level), 20–79 is upper-division (sophomore–senior-level), and 80–99 is graduate-level. ` +
   `Use this to answer questions about credit hours or course level (e.g. "C S 314" is a 3-credit upper-division course). ` +
-  `Cite concrete grade percentages and ratings when relevant. Do not mention course enrollment status ` +
+  `Cite concrete grade percentages and ratings when relevant. ` +
+  `When the student asks you to build, plan, or generate a schedule — or which sections of several courses ` +
+  `fit together without time conflicts — call the buildSchedule tool with the course codes they name and any ` +
+  `time/day preferences (noClassBefore, noClassAfter, daysOff, prioritize); never assemble a schedule yourself, ` +
+  `because only the tool checks for conflicts. Describe the best one or two schedules it returns — the courses, ` +
+  `their professors, and meeting days/times, plus notable traits like days off or a compact week. If it reports ` +
+  `notFound codes, say which weren't found; if courses are infeasible or appear in alwaysConflict, explain those ` +
+  `sections can't be combined under the given preferences and suggest relaxing one. The course cards shown beneath ` +
+  `your answer let the student open a course and add a section. ` +
+  `Do not mention course enrollment status ` +
   `(open, closed, waitlisted) — it is not provided and changes over time. If the provided sections do not ` +
   `contain the answer, say so instead of guessing.`;
+
+// --- Schedule builder (buildSchedule tool) -----------------------------------------------------
+
+const DAY_INDEX: Record<string, number> = {
+  monday: 0, mon: 0, m: 0,
+  tuesday: 1, tues: 1, tue: 1, tu: 1, t: 1,
+  wednesday: 2, wed: 2, w: 2,
+  thursday: 3, thurs: 3, thur: 3, thu: 3, th: 3,
+  friday: 4, fri: 4, f: 4,
+  saturday: 5, sat: 5, sa: 5,
+  sunday: 6, sun: 6, su: 6,
+};
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+// "9", "9am", "9:30 am", "13:00", "1pm" -> minute-of-day; null if unparseable.
+function parseClock(raw: string): number | null {
+  const m = (raw ?? "").trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?$/i);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = m[2] ? Number(m[2]) : 0;
+  const ap = (m[3] ?? "").replace(/\./g, "").toLowerCase();
+  if (ap === "pm") h = h === 12 ? 12 : h + 12;
+  else if (ap === "am") h = h === 12 ? 0 : h;
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// One section row from the sections_by_codes RPC (course_detail shape + course_id/course_code).
+type DetailRow = {
+  course_id: number;
+  course_code: string | null;
+  section_id: number;
+  course_header: string;
+  description: string | null;
+  instruction_mode: string | null;
+  register_url: string | null;
+  schedule_days: string[] | null;
+  schedule_hours: string[] | null;
+  schedule_location: string[] | null;
+  core_curriculum: string[] | null;
+  instructors: string[] | null;
+  grade_data: Record<string, number> | null;
+  instructor_grades: RetrievedSection["instructor_grades"];
+  semester_grades: RetrievedSection["semester_grades"];
+  evaluations: RetrievedSection["evaluations"];
+  professor_ratings: RetrievedSection["professor_ratings"];
+};
+
+// Collapse per-section rows into one RetrievedSection per course (every section under
+// course_sections; per-professor grades/evals/RMP merged across them) — the shape the scheduler
+// and the course chips expect, mirroring the RAG grouping above and lib/browse.ts.
+function groupCourses(rows: DetailRow[]): RetrievedSection[] {
+  // Group by course CODE, not course_id: UT lists several `courses` rows under one code (topics /
+  // cross-lists), and "schedule GOV 310L" means one GOV 310L slot whose sections we choose among —
+  // grouping by id would schedule each row as a separate course (two GOV 310L sections at once).
+  const byCode = new Map<string, DetailRow[]>();
+  for (const r of rows) {
+    const code = courseCode(r.course_header);
+    const list = byCode.get(code);
+    if (list) list.push(r);
+    else byCode.set(code, [r]);
+  }
+  const out: RetrievedSection[] = [];
+  for (const group of byCode.values()) {
+    const rep = group[0]!;
+    const ig = new Map<string, any>();
+    const ev = new Map<string, any>();
+    const rmp = new Map<string, any>();
+    for (const g of group) {
+      for (const x of (g.instructor_grades as any[]) ?? [])
+        if (x?.instructor && !ig.has(x.instructor)) ig.set(x.instructor, x);
+      for (const e of (g.evaluations as any[]) ?? []) {
+        const k = e?.instructor ?? e?.cesLink;
+        if (k && !ev.has(k)) ev.set(k, e);
+      }
+      for (const p of (g.professor_ratings as any[]) ?? [])
+        if (p?.instructor && !rmp.has(p.instructor)) rmp.set(p.instructor, p);
+    }
+    out.push({
+      section_id: rep.section_id,
+      course_header: rep.course_header,
+      description: rep.description,
+      instructors: rep.instructors ?? [],
+      instruction_mode: rep.instruction_mode,
+      register_url: rep.register_url,
+      schedule_days: rep.schedule_days,
+      schedule_hours: rep.schedule_hours,
+      schedule_location: rep.schedule_location,
+      core_curriculum: rep.core_curriculum,
+      grade_data: rep.grade_data,
+      instructor_grades: ig.size ? ([...ig.values()] as any) : rep.instructor_grades,
+      semester_grades: rep.semester_grades,
+      evaluations: ev.size ? ([...ev.values()] as any) : rep.evaluations,
+      professor_ratings: rmp.size ? ([...rmp.values()] as any) : rep.professor_ratings,
+      course_sections: group.map((g) => ({
+        section_id: g.section_id,
+        instructors: g.instructors ?? [],
+        instruction_mode: g.instruction_mode,
+        register_url: g.register_url,
+        schedule_days: g.schedule_days,
+        schedule_hours: g.schedule_hours,
+        schedule_location: g.schedule_location,
+      })),
+    });
+  }
+  return out;
+}
 
 export default {
   async fetch(
@@ -717,6 +856,10 @@ export default {
         apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
       });
 
+      // When buildSchedule runs, the courses it scheduled become the chips (they're exactly what the
+      // answer is about), overriding the RAG-retrieved chips. Captured here, read in onFinish.
+      let scheduledCourses: RetrievedSection[] = [];
+
       return createDataStreamResponse({
         headers: cors,
         // Course chips are attached in onFinish, filtered to the courses the answer actually
@@ -775,6 +918,7 @@ export default {
                           difficulty: overall.rmpDifficulty,
                           wouldTakeAgainPercent: overall.rmpWouldTakeAgain,
                           numRatings: overall.rmpNumRatings,
+                          tags: overall.rmpTags,
                         }
                       : null,
                   };
@@ -802,6 +946,169 @@ export default {
                         };
                   }
                   return out;
+                },
+              }),
+              buildSchedule: tool({
+                description:
+                  "Generate ranked, conflict-free class schedules from the specific courses a student names. Call this whenever the student asks you to build, plan, generate, or put together a schedule, or asks which sections of several courses fit together without time conflicts. Pass each course code they mention (as written, e.g. 'C S 314', 'M 408C') plus any time/day preferences. Never hand-build a schedule yourself — only this tool checks for conflicts.",
+                parameters: jsonSchema<{
+                  courses: string[];
+                  noClassBefore?: string;
+                  noClassAfter?: string;
+                  daysOff?: string[];
+                  prioritize?:
+                    | "best"
+                    | "easiest"
+                    | "compact"
+                    | "earliest"
+                    | "daysoff";
+                }>({
+                  type: "object",
+                  properties: {
+                    courses: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "Course codes to schedule, e.g. ['C S 314', 'M 408C', 'GOV 310L'].",
+                    },
+                    noClassBefore: {
+                      type: "string",
+                      description:
+                        "Earliest acceptable class start time, e.g. '9:00 AM'. Omit if no preference.",
+                    },
+                    noClassAfter: {
+                      type: "string",
+                      description:
+                        "Latest acceptable class end time, e.g. '6:00 PM'. Omit if no preference.",
+                    },
+                    daysOff: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "Weekdays that must have no classes, e.g. ['Friday'].",
+                    },
+                    prioritize: {
+                      type: "string",
+                      enum: [
+                        "best",
+                        "easiest",
+                        "compact",
+                        "earliest",
+                        "daysoff",
+                      ],
+                      description:
+                        "What to optimize: 'best' (top professors — the default), 'easiest' (highest historical A-rates), 'compact' (fewest gaps between classes), 'earliest' (favor later start times), 'daysoff' (most class-free weekdays).",
+                    },
+                  },
+                  required: ["courses"],
+                  additionalProperties: false,
+                }),
+                execute: async ({
+                  courses,
+                  noClassBefore,
+                  noClassAfter,
+                  daysOff,
+                  prioritize,
+                }) => {
+                  const codes = (courses ?? [])
+                    .map((c) => String(c).trim())
+                    .filter(Boolean)
+                    .slice(0, 8); // bound the search; 8 courses is already well past a full load
+                  if (!codes.length)
+                    return {
+                      ok: false,
+                      message: "No course codes were provided to schedule.",
+                    };
+
+                  const { data: rows, error } = await supabase.rpc(
+                    "sections_by_codes",
+                    { p_codes: codes },
+                  );
+                  if (error) {
+                    console.error("sections_by_codes error:", error);
+                    return {
+                      ok: false,
+                      message:
+                        "Couldn't load course sections right now. Please try again.",
+                    };
+                  }
+
+                  const grouped = groupCourses((rows ?? []) as DetailRow[]);
+                  scheduledCourses = grouped;
+
+                  const norm = (s: string) =>
+                    s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                  const found = new Set(
+                    grouped.map((g) => norm(courseCode(g.course_header))),
+                  );
+                  const notFound = codes.filter((c) => !found.has(norm(c)));
+
+                  if (!grouped.length)
+                    return {
+                      ok: true,
+                      requested: codes,
+                      notFound,
+                      schedules: [],
+                      infeasible: [],
+                      alwaysConflict: [],
+                      message:
+                        "None of those course codes matched a Fall 2026 course.",
+                    };
+
+                  const prefs: SchedulerPrefs = {
+                    rank: prioritize ?? "best",
+                  };
+                  const before = noClassBefore ? parseClock(noClassBefore) : null;
+                  const after = noClassAfter ? parseClock(noClassAfter) : null;
+                  if (before != null) prefs.earliestStartMin = before;
+                  if (after != null) prefs.latestEndMin = after;
+                  const offDays = (daysOff ?? [])
+                    .map((d) => DAY_INDEX[String(d).trim().toLowerCase()])
+                    .filter((d): d is number => typeof d === "number");
+                  if (offDays.length) prefs.requiredDaysOff = offDays;
+
+                  const result = generateSchedules(grouped, prefs);
+
+                  const schedules = result.schedules.slice(0, 3).map((s) => ({
+                    courses: s.picks.map((p) => {
+                      const sec = p.section;
+                      return {
+                        code: courseCode(p.course.course_header),
+                        sectionId: sec.section_id,
+                        instructors: (sec.instructors ?? [])
+                          .map(formatName)
+                          .filter(Boolean),
+                        instructionMode: sec.instruction_mode,
+                        meetings: (sec.schedule_days ?? []).map((d, i) => ({
+                          days: (d ?? "").trim(),
+                          time:
+                            formatHours(sec.schedule_hours?.[i] ?? "") || "TBA",
+                          location: (sec.schedule_location?.[i] ?? "").trim(),
+                        })),
+                      };
+                    }),
+                    quality: Math.round(s.quality * 100) / 100,
+                    ease: Math.round(s.ease * 100) / 100,
+                    daysOff: s.daysOff
+                      .map((d) => DAY_NAMES[d])
+                      .filter(Boolean),
+                    earliestStart:
+                      s.earliestStart != null
+                        ? minuteLabel(s.earliestStart)
+                        : null,
+                    gapHours: Math.round((s.gapMinutes / 60) * 10) / 10,
+                  }));
+
+                  return {
+                    ok: true,
+                    requested: codes,
+                    notFound,
+                    infeasible: result.infeasible,
+                    alwaysConflict: result.alwaysConflict,
+                    truncated: result.truncated,
+                    count: result.schedules.length,
+                    schedules,
+                  };
                 },
               }),
             },
@@ -835,11 +1142,15 @@ export default {
               });
               const shownSections =
                 mentioned.length > 0 ? mentioned : cleanSections;
+              // A built schedule's courses are exactly what the answer is about, so they take
+              // precedence over the RAG-retrieved chips.
+              const annotationSections =
+                scheduledCourses.length > 0 ? scheduledCourses : shownSections;
 
-              if (shownSections.length > 0) {
+              if (annotationSections.length > 0) {
                 dataStream.writeMessageAnnotation({
                   type: "courses",
-                  sections: shownSections,
+                  sections: annotationSections,
                 } as unknown as JSONValue);
               }
 
@@ -851,9 +1162,9 @@ export default {
               });
               // Re-attach the annotation (not in response.messages) so reloads keep the chips.
               const last = saved[saved.length - 1] as any;
-              if (last && shownSections.length > 0) {
+              if (last && annotationSections.length > 0) {
                 last.annotations = [
-                  { type: "courses", sections: shownSections },
+                  { type: "courses", sections: annotationSections },
                 ];
               }
               const { error } = await supabase
