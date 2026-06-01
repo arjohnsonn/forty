@@ -10,15 +10,26 @@ import {
   type CoreMessage,
   type JSONValue,
 } from "ai";
-// Pure (no React/Supabase) schedule logic + parsing, shared with the Next app. The Worker bundles
-// these via esbuild — see lib/scheduler.ts ("…and, later, inside the chat Worker").
-import { generateSchedules, type SchedulerPrefs } from "../../../lib/scheduler";
+// Pure schedule logic + parsing shared with the Next app; the Worker bundles it via esbuild.
+import {
+  generateSchedules,
+  sectionQuality,
+  sectionEase,
+  sectionGpa,
+  type SchedulerPrefs,
+} from "../../../lib/scheduler";
 import {
   courseCode,
+  courseMeta,
   formatName,
   formatHours,
   minuteLabel,
+  parseDays,
+  parseHourRange,
+  toScheduleSection,
   type RetrievedSection,
+  type ScheduleSection,
+  type CourseSection,
 } from "../../../lib/courses";
 
 // Cloudflare's native rate-limiting binding (configured in wrangler.jsonc).
@@ -68,6 +79,30 @@ async function embedQuery(text: string, apiKey: string): Promise<number[]> {
   return normalize(data.embedding.values);
 }
 
+// Embed several queries in ONE batch request — avoids the rate-limit burst of parallel embedContent calls.
+async function embedQueries(texts: string[], apiKey: string): Promise<number[][]> {
+  if (!texts.length) return [];
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/${EMBED_MODEL}:batchEmbedContents?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: texts.map((text) => ({
+          model: EMBED_MODEL,
+          content: { parts: [{ text }] },
+          taskType: "RETRIEVAL_QUERY",
+          outputDimensionality: EMBED_DIM,
+        })),
+      }),
+    },
+  );
+  if (!res.ok)
+    throw new Error(`Batch embedding failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { embeddings: { values: number[] }[] };
+  return (data.embeddings ?? []).map((e) => normalize(e.values));
+}
+
 // RateMyProfessors live refresh. The snapshot (scripts/rmp.ts) pins each professor to an
 // rmp_legacy_id; here we fetch that professor's *current* numbers by id (cheap, exact — no
 // re-matching), short-cached at the edge, so a freshly-posted rating shows up without a re-scrape.
@@ -80,8 +115,7 @@ type RmpLive = {
   rmpDifficulty: number;
   rmpNumRatings: number;
   rmpWouldTakeAgain: number | null;
-  // The labels students apply most often (e.g. "Tough grader"), highest-count first — same source
-  // as the professor card's "Top tags". Empty when the professor has none.
+  // Most-applied student tags (e.g. "Tough grader"), highest-count first; empty when none.
   rmpTags: string[];
 };
 
@@ -484,7 +518,10 @@ const SYSTEM_PROMPT =
   `For any professor the user names — including one not in the Sections data, or a course a professor is ` +
   `not teaching this term — call the getProfessorRating tool to fetch their RateMyProfessors numbers (pass ` +
   `the course code for course-specific or comparison questions) instead of saying the data is unavailable. ` +
-  `Grade fields are counts of A/B/C/D/F/Other. ` +
+  `Grade fields are student counts per letter grade with +/- detail (A+, A, A-, B+, B, B-, … D-, F, and ` +
+  `Other for non-letter marks like Pass/Credit/Withdraw). You can compute the average GPA on the 4.0 scale ` +
+  `(A/A+ = 4.0, A- = 3.67, B+ = 3.33, B = 3.0, …, F = 0; Other is excluded) and cite it when discussing how hard ` +
+  `a course or professor grades. ` +
   `Instructor names in the structured fields are "LAST, FIRST" (e.g. "LEWIS, CHARLTON N") while the summary ` +
   `prose uses "First Last" (e.g. "Charlton N Lewis") — treat them as the same person when matching a query. ` +
   `instructor_grades covers every instructor of a section, but evaluations may exist for only some of them; ` +
@@ -495,13 +532,28 @@ const SYSTEM_PROMPT =
   `Use this to answer questions about credit hours or course level (e.g. "C S 314" is a 3-credit upper-division course). ` +
   `Cite concrete grade percentages and ratings when relevant. ` +
   `When the student asks you to build, plan, or generate a schedule — or which sections of several courses ` +
-  `fit together without time conflicts — call the buildSchedule tool with the course codes they name and any ` +
-  `time/day preferences (noClassBefore, noClassAfter, daysOff, prioritize); never assemble a schedule yourself, ` +
-  `because only the tool checks for conflicts. Describe the best one or two schedules it returns — the courses, ` +
-  `their professors, and meeting days/times, plus notable traits like days off or a compact week. If it reports ` +
-  `notFound codes, say which weren't found; if courses are infeasible or appear in alwaysConflict, explain those ` +
-  `sections can't be combined under the given preferences and suggest relaxing one. The course cards shown beneath ` +
-  `your answer let the student open a course and add a section. ` +
+  `fit together without time conflicts — call the buildSchedule tool, passing EVERY course the student named the ` +
+  `way they referred to it: an exact code when they gave one (e.g. "CH 302"), otherwise their topic/name ` +
+  `description verbatim (e.g. "cs algorithms", "an american literature class"). NEVER guess or invent a course ` +
+  `number — the tool resolves descriptions against the real catalog and returns a "resolved" list mapping each ` +
+  `description to the course it matched; name those resolved courses in your answer so the student can correct a ` +
+  `wrong match. Pass a course even if it is ` +
+  `NOT in the "Sections" data above — that data is unrelated retrieval, not the schedule catalog, so never use it ` +
+  `to decide whether a course exists or is offered, and never refuse or claim a course is unavailable before ` +
+  `calling buildSchedule; only the tool's notFound list tells you what is actually missing. Never assemble a ` +
+  `schedule yourself — only the tool checks for conflicts. Each schedule it returns is shown to the student as a ` +
+  `visual weekly-grid card with a Save button beneath your answer, so do NOT list every meeting time — briefly ` +
+  `recommend the best option and call out its tradeoffs (top professors, higher average GPA, days off, a compact ` +
+  `week, an early or late start; each option includes a gpa field). If it reports notFound codes, still build the ` +
+  `schedule with the courses that WERE found and just ` +
+  `note which weren't; if courses are infeasible or appear in alwaysConflict, explain those sections can't be ` +
+  `combined under the given preferences and suggest relaxing one. ` +
+  `To refine a schedule the student already built, call buildSchedule again and pass keep = the sectionId values ` +
+  `(from the previous result) of the sections to leave unchanged; the kept courses are scheduled around while only ` +
+  `the others are re-chosen. To swap a course, drop its code from courses and add the new one (keep the rest); to ` +
+  `add a course, append its code and keep the others; to apply a new time/day preference, pass it (it affects only ` +
+  `the courses being re-chosen, not the kept ones). When the student references "option 2" or "the one with Fridays ` +
+  `off", keep that option's sectionIds. ` +
   `Do not mention course enrollment status ` +
   `(open, closed, waitlisted) — it is not provided and changes over time. If the provided sections do not ` +
   `contain the answer, say so instead of guessing.`;
@@ -553,13 +605,9 @@ type DetailRow = {
   professor_ratings: RetrievedSection["professor_ratings"];
 };
 
-// Collapse per-section rows into one RetrievedSection per course (every section under
-// course_sections; per-professor grades/evals/RMP merged across them) — the shape the scheduler
-// and the course chips expect, mirroring the RAG grouping above and lib/browse.ts.
+// Collapse per-section rows into one RetrievedSection per course (the shape the scheduler + chips expect).
 function groupCourses(rows: DetailRow[]): RetrievedSection[] {
-  // Group by course CODE, not course_id: UT lists several `courses` rows under one code (topics /
-  // cross-lists), and "schedule GOV 310L" means one GOV 310L slot whose sections we choose among —
-  // grouping by id would schedule each row as a separate course (two GOV 310L sections at once).
+  // Group by course CODE, not id: UT lists topics under one code, so "schedule GOV 310L" is one slot.
   const byCode = new Map<string, DetailRow[]>();
   for (const r of rows) {
     const code = courseCode(r.course_header);
@@ -612,6 +660,76 @@ function groupCourses(rows: DetailRow[]): RetrievedSection[] {
   }
   return out;
 }
+
+type Pick = { course: RetrievedSection; section: CourseSection };
+
+const parsedMeetings = (sec: CourseSection) => {
+  const out: { days: number[]; startMin: number; endMin: number }[] = [];
+  const days = sec.schedule_days ?? [];
+  const hours = sec.schedule_hours ?? [];
+  for (let i = 0; i < days.length; i++) {
+    const d = parseDays(days[i] ?? "");
+    const r = parseHourRange(hours[i] ?? "");
+    if (d.length && r) out.push({ days: d, startMin: r.startMin, endMin: r.endMin });
+  }
+  return out;
+};
+
+// Whole-week stats for a set of picks, so a refined schedule reflects the kept classes too.
+const scheduleStats = (picks: Pick[]) => {
+  const meetings = picks.flatMap((p) => parsedMeetings(p.section));
+  const used = new Set<number>();
+  let earliest: number | null = null;
+  for (const m of meetings) {
+    for (const d of m.days) used.add(d);
+    earliest = earliest == null ? m.startMin : Math.min(earliest, m.startMin);
+  }
+  let gapMinutes = 0;
+  for (let d = 0; d <= 4; d++) {
+    const day = meetings.filter((m) => m.days.includes(d)).sort((a, b) => a.startMin - b.startMin);
+    for (let i = 1; i < day.length; i++)
+      gapMinutes += Math.max(0, day[i]!.startMin - day[i - 1]!.endMin);
+  }
+  return {
+    daysOff: [0, 1, 2, 3, 4].filter((d) => !used.has(d)),
+    earliestStart: earliest,
+    gapMinutes,
+  };
+};
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// One full schedule (kept + re-picked picks) as both the model summary and the savable UI card.
+const summarizeSchedule = (picks: Pick[]) => {
+  const stats = scheduleStats(picks);
+  const mean = (f: (p: Pick) => number) =>
+    picks.length ? picks.reduce((s, p) => s + f(p), 0) / picks.length : 0.5;
+  return {
+    courses: picks.map((p) => ({
+      code: courseCode(p.course.course_header),
+      sectionId: p.section.section_id,
+      instructors: (p.section.instructors ?? []).map(formatName).filter(Boolean),
+      instructionMode: p.section.instruction_mode,
+      meetings: (p.section.schedule_days ?? []).map((d, i) => ({
+        days: (d ?? "").trim(),
+        time: formatHours(p.section.schedule_hours?.[i] ?? "") || "TBA",
+        location: (p.section.schedule_location?.[i] ?? "").trim(),
+      })),
+    })),
+    sections: picks.map((p) => ({ ...toScheduleSection(p.course, p.section), detail: null })),
+    quality: round2(mean((p) => sectionQuality(p.course, p.section))),
+    ease: round2(mean((p) => sectionEase(p.course, p.section))),
+    gpa: (() => {
+      const vals = picks
+        .map((p) => sectionGpa(p.course, p.section))
+        .filter((g): g is number => g != null);
+      return vals.length ? round2(vals.reduce((s, x) => s + x, 0) / vals.length) : null;
+    })(),
+    daysOff: stats.daysOff.map((d) => DAY_NAMES[d]).filter(Boolean),
+    earliestStart: stats.earliestStart != null ? minuteLabel(stats.earliestStart) : null,
+    gapHours: Math.round((stats.gapMinutes / 60) * 10) / 10,
+  };
+};
 
 export default {
   async fetch(
@@ -856,9 +974,18 @@ export default {
         apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
       });
 
-      // When buildSchedule runs, the courses it scheduled become the chips (they're exactly what the
-      // answer is about), overriding the RAG-retrieved chips. Captured here, read in onFinish.
+      // Courses buildSchedule scheduled — used as the chips in onFinish, overriding the RAG ones.
       let scheduledCourses: RetrievedSection[] = [];
+      // Each generated option as savable sections + its stats — rendered as weekly-grid cards in chat.
+      let scheduleOptions: {
+        sections: ScheduleSection[];
+        quality: number;
+        ease: number;
+        gpa: number | null;
+        daysOff: string[];
+        gapHours: number;
+        earliestStart: string | null;
+      }[] = [];
 
       return createDataStreamResponse({
         headers: cors,
@@ -950,9 +1077,10 @@ export default {
               }),
               buildSchedule: tool({
                 description:
-                  "Generate ranked, conflict-free class schedules from the specific courses a student names. Call this whenever the student asks you to build, plan, generate, or put together a schedule, or asks which sections of several courses fit together without time conflicts. Pass each course code they mention (as written, e.g. 'C S 314', 'M 408C') plus any time/day preferences. Never hand-build a schedule yourself — only this tool checks for conflicts.",
+                  "Generate ranked, conflict-free class schedules from the courses a student names. Call this whenever the student asks you to build, plan, generate, or put together a schedule, or asks which sections of several courses fit together without time conflicts. Pass each course as the student referred to it — an exact code if they gave one, otherwise their topic/name description; the tool resolves descriptions against the real catalog, so never guess or invent a course number. Never hand-build a schedule yourself — only this tool checks for conflicts.",
                 parameters: jsonSchema<{
                   courses: string[];
+                  keep?: number[];
                   noClassBefore?: string;
                   noClassAfter?: string;
                   daysOff?: string[];
@@ -969,7 +1097,13 @@ export default {
                       type: "array",
                       items: { type: "string" },
                       description:
-                        "Course codes to schedule, e.g. ['C S 314', 'M 408C', 'GOV 310L'].",
+                        "The courses to schedule, each exactly as the student referred to it. If they gave a course code/number, pass just the subject+number (e.g. 'C S 314', 'CH 302', 'UGS 303' — not the full title). If they described a course by TOPIC or NAME (e.g. 'cs algorithms', 'cs virtualization', 'an american literature class'), pass that description verbatim. Do NOT invent, guess, or convert a description into a course number yourself — the tool looks each one up in the real catalog and returns what it resolved.",
+                    },
+                    keep: {
+                      type: "array",
+                      items: { type: "number" },
+                      description:
+                        "When refining a schedule the student already built: the section IDs (the sectionId values from the previous buildSchedule result) to leave UNCHANGED. Their courses are scheduled around; only courses without a kept section are re-chosen. Omit when building a fresh schedule.",
                     },
                     noClassBefore: {
                       type: "string",
@@ -1005,24 +1139,29 @@ export default {
                 }),
                 execute: async ({
                   courses,
+                  keep,
                   noClassBefore,
                   noClassAfter,
                   daysOff,
                   prioritize,
                 }) => {
-                  const codes = (courses ?? [])
+                  const rawInputs = (courses ?? [])
                     .map((c) => String(c).trim())
                     .filter(Boolean)
                     .slice(0, 8); // bound the search; 8 courses is already well past a full load
-                  if (!codes.length)
+                  if (!rawInputs.length)
                     return {
                       ok: false,
-                      message: "No course codes were provided to schedule.",
+                      message: "No courses were provided to schedule.",
                     };
 
-                  const { data: rows, error } = await supabase.rpc(
+                  const norm = (s: string) =>
+                    s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+                  // 1. Try each input as a course code (handles "C S 314", "CH 302", or a full title).
+                  const { data: codeRows, error } = await supabase.rpc(
                     "sections_by_codes",
-                    { p_codes: codes },
+                    { p_codes: rawInputs.map((c) => courseCode(c)) },
                   );
                   if (error) {
                     console.error("sections_by_codes error:", error);
@@ -1032,27 +1171,154 @@ export default {
                         "Couldn't load course sections right now. Please try again.",
                     };
                   }
+                  let rows = (codeRows ?? []) as DetailRow[];
+                  const matched = new Set(
+                    rows.map((r) => norm(courseCode(r.course_header))),
+                  );
 
-                  const grouped = groupCourses((rows ?? []) as DetailRow[]);
+                  // Inputs that didn't match a code are descriptions (or a wrong guess) — resolve each to a real course by embedding, not an invented number.
+                  const resolved: { input: string; code: string; title: string; sectionId: number }[] = [];
+                  const unresolved = rawInputs.filter(
+                    (c) => !matched.has(norm(courseCode(c))),
+                  );
+                  console.log(
+                    `[ScheduleDebug] inputs=${JSON.stringify(rawInputs)} ` +
+                      `matchedByCode=${JSON.stringify([...matched])} toResolve=${JSON.stringify(unresolved)}`,
+                  );
+                  if (unresolved.length) {
+                    // ONE batch embed for all descriptions — parallel calls hit Gemini's rate limit and drop some.
+                    let embs: number[][] = [];
+                    try {
+                      embs = await embedQueries(
+                        unresolved,
+                        env.GOOGLE_GENERATIVE_AI_API_KEY,
+                      );
+                    } catch (e) {
+                      console.error(
+                        `[ScheduleDebug] batch embed FAILED:`,
+                        e instanceof Error ? e.message : e,
+                      );
+                    }
+                    console.log(
+                      `[ScheduleDebug] embedded ${embs.length}/${unresolved.length} descriptions`,
+                    );
+                    await Promise.all(
+                      unresolved.map(async (input, i) => {
+                        const emb = embs[i];
+                        if (!emb) {
+                          console.error(`[ScheduleDebug] no embedding for "${input}"`);
+                          return;
+                        }
+                        try {
+                          const { data } = await supabase
+                            .rpc("match_sections_detailed", {
+                              embedding: JSON.stringify(emb),
+                              match_threshold: 0.4,
+                            })
+                            .limit(8);
+                          // Group hits by full course_header (distinct topics like UGS 303 SLEEP vs ADVENTURE LAB); prefer the first non-graduate.
+                          const seenTitle = new Set<string>();
+                          const topics: { code: string; title: string; sectionId: number }[] = [];
+                          for (const r of (data ?? []) as {
+                            section_id?: number;
+                            course_header?: string;
+                          }[]) {
+                            if (!r.course_header || r.section_id == null) continue;
+                            if (seenTitle.has(r.course_header)) continue;
+                            seenTitle.add(r.course_header);
+                            topics.push({
+                              code: courseCode(r.course_header),
+                              title: r.course_header,
+                              sectionId: r.section_id,
+                            });
+                          }
+                          const pick =
+                            topics.find(
+                              (t) => courseMeta(t.code)?.level !== "Graduate",
+                            ) ?? topics[0];
+                          console.log(
+                            `[ScheduleDebug] resolve "${input}" -> ${pick?.title ?? "NONE"} ` +
+                              `(top: ${JSON.stringify(topics.slice(0, 4).map((t) => t.title))})`,
+                          );
+                          if (pick)
+                            resolved.push({
+                              input,
+                              code: pick.code,
+                              title: pick.title,
+                              sectionId: pick.sectionId,
+                            });
+                        } catch (e) {
+                          console.error(
+                            `[ScheduleDebug] match FAILED for "${input}":`,
+                            e instanceof Error ? e.message : e,
+                          );
+                        }
+                      }),
+                    );
+                  }
+                  // Fetch each resolved TOPIC by course_id (via its matched section), not by code — shared numbers like UGS 303 / C S 378 would otherwise pull in every topic.
+                  if (resolved.length) {
+                    const { data: secRows } = await supabase
+                      .from("sections")
+                      .select("id, course_id")
+                      .in(
+                        "id",
+                        resolved.map((r) => r.sectionId),
+                      );
+                    const courseIds = [
+                      ...new Set(
+                        ((secRows ?? []) as { course_id: number }[]).map((s) => s.course_id),
+                      ),
+                    ];
+                    const detail = (
+                      await Promise.all(
+                        courseIds.map(async (cid) => {
+                          const { data } = await supabase.rpc("course_detail", {
+                            p_course_id: cid,
+                          });
+                          return (data ?? []) as DetailRow[];
+                        }),
+                      )
+                    ).flat();
+                    rows = [...rows, ...detail];
+                  }
+
+                  // Drop duplicate sections (a topic can arrive via both a code match and a resolution).
+                  const seenSection = new Set<number>();
+                  rows = rows.filter((r) => {
+                    if (seenSection.has(r.section_id)) return false;
+                    seenSection.add(r.section_id);
+                    return true;
+                  });
+
+                  const grouped = groupCourses(rows);
                   scheduledCourses = grouped;
 
-                  const norm = (s: string) =>
-                    s.toUpperCase().replace(/[^A-Z0-9]/g, "");
                   const found = new Set(
                     grouped.map((g) => norm(courseCode(g.course_header))),
                   );
-                  const notFound = codes.filter((c) => !found.has(norm(c)));
+                  const notFound = rawInputs.filter((input) => {
+                    if (found.has(norm(courseCode(input)))) return false;
+                    const r = resolved.find((x) => x.input === input);
+                    return !(r && found.has(norm(r.code)));
+                  });
+                  console.log(
+                    `[ScheduleDebug] grouped=${JSON.stringify(grouped.map((g) => courseCode(g.course_header)))} ` +
+                      `resolved=${JSON.stringify(resolved.map((r) => `${r.input} -> ${r.code}`))} ` +
+                      `notFound=${JSON.stringify(notFound)}`,
+                  );
 
                   if (!grouped.length)
                     return {
                       ok: true,
-                      requested: codes,
+                      requested: rawInputs,
+                      resolved,
                       notFound,
                       schedules: [],
                       infeasible: [],
                       alwaysConflict: [],
                       message:
-                        "None of those course codes matched a Fall 2026 course.",
+                        "Couldn't match any of those to a Fall 2026 course.",
                     };
 
                   const prefs: SchedulerPrefs = {
@@ -1067,47 +1333,75 @@ export default {
                     .filter((d): d is number => typeof d === "number");
                   if (offDays.length) prefs.requiredDaysOff = offDays;
 
-                  const result = generateSchedules(grouped, prefs);
+                  // Refinement: lock the kept sections (they bypass prefs, scheduled around as `fixed`); re-pick the rest.
+                  const keepSet = new Set(
+                    (keep ?? []).filter((n): n is number => typeof n === "number"),
+                  );
+                  const keptPicks: Pick[] = [];
+                  const repickCourses: RetrievedSection[] = [];
+                  for (const c of grouped) {
+                    const kept = (c.course_sections ?? []).find((s) =>
+                      keepSet.has(s.section_id),
+                    );
+                    if (kept) keptPicks.push({ course: c, section: kept });
+                    else repickCourses.push(c);
+                  }
 
-                  const schedules = result.schedules.slice(0, 3).map((s) => ({
-                    courses: s.picks.map((p) => {
-                      const sec = p.section;
-                      return {
-                        code: courseCode(p.course.course_header),
-                        sectionId: sec.section_id,
-                        instructors: (sec.instructors ?? [])
-                          .map(formatName)
-                          .filter(Boolean),
-                        instructionMode: sec.instruction_mode,
-                        meetings: (sec.schedule_days ?? []).map((d, i) => ({
-                          days: (d ?? "").trim(),
-                          time:
-                            formatHours(sec.schedule_hours?.[i] ?? "") || "TBA",
-                          location: (sec.schedule_location?.[i] ?? "").trim(),
+                  const gen = repickCourses.length
+                    ? generateSchedules(
+                        repickCourses,
+                        prefs,
+                        keptPicks.map((p) => ({
+                          schedule_days: p.section.schedule_days,
+                          schedule_hours: p.section.schedule_hours,
                         })),
-                      };
-                    }),
-                    quality: Math.round(s.quality * 100) / 100,
-                    ease: Math.round(s.ease * 100) / 100,
-                    daysOff: s.daysOff
-                      .map((d) => DAY_NAMES[d])
-                      .filter(Boolean),
-                    earliestStart:
-                      s.earliestStart != null
-                        ? minuteLabel(s.earliestStart)
-                        : null,
-                    gapHours: Math.round((s.gapMinutes / 60) * 10) / 10,
+                      )
+                    : null;
+
+                  // Merge the locked sections into each option; if nothing was re-picked, it's just the kept ones.
+                  const pickSets: Pick[][] = gen
+                    ? gen.schedules
+                        .slice(0, 3)
+                        .map((s) => [...keptPicks, ...s.picks])
+                    : keptPicks.length
+                      ? [keptPicks]
+                      : [];
+                  const summaries = pickSets.map(summarizeSchedule);
+                  console.log(
+                    `[ScheduleDebug] ${summaries.length} schedule(s)` +
+                      (gen
+                        ? ` infeasible=${JSON.stringify(gen.infeasible)} alwaysConflict=${JSON.stringify(gen.alwaysConflict)}`
+                        : " (all kept, none re-picked)"),
+                  );
+
+                  // Savable grid cards for the UI (detail stripped to keep the message small).
+                  scheduleOptions = summaries.map((m) => ({
+                    sections: m.sections,
+                    quality: m.quality,
+                    ease: m.ease,
+                    gpa: m.gpa,
+                    daysOff: m.daysOff,
+                    gapHours: m.gapHours,
+                    earliestStart: m.earliestStart,
                   }));
 
                   return {
                     ok: true,
-                    requested: codes,
+                    requested: rawInputs,
+                    resolved,
                     notFound,
-                    infeasible: result.infeasible,
-                    alwaysConflict: result.alwaysConflict,
-                    truncated: result.truncated,
-                    count: result.schedules.length,
-                    schedules,
+                    infeasible: gen ? gen.infeasible : [],
+                    alwaysConflict: gen ? gen.alwaysConflict : [],
+                    truncated: gen ? gen.truncated : false,
+                    count: summaries.length,
+                    schedules: summaries.map((m) => ({
+                      courses: m.courses,
+                      quality: m.quality,
+                      gpa: m.gpa,
+                      daysOff: m.daysOff,
+                      earliestStart: m.earliestStart,
+                      gapHours: m.gapHours,
+                    })),
                   };
                 },
               }),
@@ -1142,17 +1436,27 @@ export default {
               });
               const shownSections =
                 mentioned.length > 0 ? mentioned : cleanSections;
-              // A built schedule's courses are exactly what the answer is about, so they take
-              // precedence over the RAG-retrieved chips.
+              // A built schedule's courses take precedence over the RAG-retrieved chips.
               const annotationSections =
                 scheduledCourses.length > 0 ? scheduledCourses : shownSections;
 
-              if (annotationSections.length > 0) {
-                dataStream.writeMessageAnnotation({
+              // A built schedule renders as grid cards; otherwise course chips (cards already name their courses).
+              const msgAnnotations: JSONValue[] = [];
+              if (scheduleOptions.length > 0) {
+                // `courses` carries each scheduled course's full detail once (deduped) for grid-block click-through.
+                msgAnnotations.push({
+                  type: "schedule",
+                  options: scheduleOptions,
+                  courses: scheduledCourses,
+                } as unknown as JSONValue);
+              } else if (annotationSections.length > 0) {
+                msgAnnotations.push({
                   type: "courses",
                   sections: annotationSections,
                 } as unknown as JSONValue);
               }
+              for (const a of msgAnnotations)
+                dataStream.writeMessageAnnotation(a);
 
               // Only logged-in users persist conversations.
               if (!user || !chatId) return;
@@ -1160,12 +1464,10 @@ export default {
                 messages: messages as any,
                 responseMessages: response.messages,
               });
-              // Re-attach the annotation (not in response.messages) so reloads keep the chips.
+              // Re-attach the annotations (not in response.messages) so reloads keep the cards/chips.
               const last = saved[saved.length - 1] as any;
-              if (last && annotationSections.length > 0) {
-                last.annotations = [
-                  { type: "courses", sections: annotationSections },
-                ];
+              if (last && msgAnnotations.length > 0) {
+                last.annotations = msgAnnotations;
               }
               const { error } = await supabase
                 .from("conversations")

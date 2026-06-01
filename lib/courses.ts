@@ -55,6 +55,46 @@ export function courseMeta(code: string): { credits: number; level: string } | n
   return { credits: Number(digits[0]), level };
 }
 
+// Full +/- grade buckets (UT grade-distribution dashboard), ordered for display.
+export const GRADE_BUCKETS = [
+  "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F", "Other",
+] as const;
+
+// UT 4.0 GPA scale; "Other" (P/CR/NC/Q/W/I/X …) is not graded and is excluded from GPA.
+export const GRADE_POINTS: Record<string, number> = {
+  "A+": 4, A: 4, "A-": 3.67,
+  "B+": 3.33, B: 3, "B-": 2.67,
+  "C+": 2.33, C: 2, "C-": 1.67,
+  "D+": 1.33, D: 1, "D-": 0.67,
+  F: 0,
+};
+
+/** Mean GPA across graded letters (excludes Other); null when there are no graded grades. */
+export function computeGpa(grades: Record<string, number> | null | undefined): number | null {
+  if (!grades) return null;
+  let points = 0;
+  let graded = 0;
+  for (const [letter, gp] of Object.entries(GRADE_POINTS)) {
+    const count = grades[letter] ?? 0;
+    points += count * gp;
+    graded += count;
+  }
+  return graded > 0 ? points / graded : null;
+}
+
+/** Sum the +/- buckets back into A/B/C/D/F/Other letter families (for compact bars/summaries). */
+export function letterTotals(grades: Record<string, number> | null | undefined): Record<string, number> {
+  const sum = (...ks: string[]) => ks.reduce((n, k) => n + (grades?.[k] ?? 0), 0);
+  return {
+    A: sum("A+", "A", "A-"),
+    B: sum("B+", "B", "B-"),
+    C: sum("C+", "C", "C-"),
+    D: sum("D+", "D", "D-"),
+    F: grades?.F ?? 0,
+    Other: grades?.Other ?? 0,
+  };
+}
+
 /** A section's parallel schedule arrays (structural — `CourseSection` satisfies it). */
 export type ScheduleArrays = {
   schedule_days: string[] | null;

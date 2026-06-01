@@ -19,6 +19,7 @@ import {
   type TimeBlock,
 } from "@/lib/courses";
 import { CourseDialog } from "@/components/CourseChips";
+import { fetchCourseBySection } from "@/lib/browse";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOUR_PX = 56;
@@ -64,7 +65,7 @@ export default function WeeklyGrid({
 }) {
   const [supabase] = useState(() => createClient());
   const [selected, setSelected] = useState<RetrievedSection | null>(null);
-  const openHeader = useRef<string | null>(null);
+  const openSection = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const columnsRef = useRef<HTMLDivElement | null>(null);
   const dragCleanup = useRef<(() => void) | null>(null);
@@ -103,22 +104,14 @@ export default function WeeklyGrid({
   useEffect(() => () => dragCleanup.current?.(), []);
 
   const openCourse = async (s: ScheduleSection) => {
-    const base = s.detail ?? scheduleSectionToRetrieved(s);
-    openHeader.current = base.course_header;
-    setSelected(base);
-    if (base.description) return;
-    const { data } = await supabase
-      .from("courses")
-      .select("description")
-      .eq("course_header", base.course_header)
-      .maybeSingle();
-    const description = (data as { description: string | null } | null)?.description;
-    if (description && openHeader.current === base.course_header) {
-      setSelected((cur) => (cur && cur.course_header === base.course_header ? { ...cur, description } : cur));
-    }
+    // Show the snapshot, then fetch THIS section's course by section_id (shared numbers like UGS 303 span many topics).
+    setSelected(s.detail ?? scheduleSectionToRetrieved(s));
+    openSection.current = s.section_id;
+    const full = await fetchCourseBySection(supabase, s.section_id);
+    if (full && openSection.current === s.section_id) setSelected(full);
   };
   const closeDialog = () => {
-    openHeader.current = null;
+    openSection.current = null;
     setSelected(null);
   };
 

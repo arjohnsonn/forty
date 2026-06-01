@@ -40,6 +40,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/utils/supabase/client";
 import CourseChips from "@/components/CourseChips";
+import ScheduleCards from "@/components/ScheduleCards";
 import {
   buildCourseTime,
   rehypeCourseTime,
@@ -424,7 +425,10 @@ function AssistantMessage({
           {text}
         </ReactMarkdown>
         {text.trim().length > 0 && (
-          <CourseChips annotations={message.annotations} />
+          <>
+            <ScheduleCards annotations={message.annotations} />
+            <CourseChips annotations={message.annotations} />
+          </>
         )}
       </div>
       {showActions && (

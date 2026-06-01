@@ -24,6 +24,8 @@ import {
   courseMeta,
   meetingsOf,
   toScheduleSection,
+  GRADE_BUCKETS,
+  computeGpa,
   type RetrievedSection,
   type CourseSection,
   type SemesterGrades,
@@ -33,15 +35,23 @@ import AddToSchedule from "@/components/AddToSchedule";
 
 export type { RetrievedSection, CourseSection } from "@/lib/courses";
 
-const BUCKETS = ["A", "B", "C", "D", "F", "Other"] as const;
-const BUCKET_COLOR: Record<string, string> = {
-  A: "bg-emerald-500",
-  B: "bg-lime-500",
-  C: "bg-yellow-500",
-  D: "bg-orange-500",
+// Family colors, shaded darker→lighter across +/ /- so each grade reads distinctly in the bar.
+const GRADE_COLOR: Record<string, string> = {
+  "A+": "bg-emerald-600", A: "bg-emerald-500", "A-": "bg-emerald-400",
+  "B+": "bg-lime-600", B: "bg-lime-500", "B-": "bg-lime-400",
+  "C+": "bg-yellow-600", C: "bg-yellow-500", "C-": "bg-yellow-400",
+  "D+": "bg-orange-600", D: "bg-orange-500", "D-": "bg-orange-400",
   F: "bg-red-500",
   Other: "bg-muted-foreground/40",
 };
+// Breakdown grid: one row per letter family (empty families are skipped).
+const FAMILY_ROWS: string[][] = [
+  ["A+", "A", "A-"],
+  ["B+", "B", "B-"],
+  ["C+", "C", "C-"],
+  ["D+", "D", "D-"],
+  ["F", "Other"],
+];
 
 /** Pull the course sections out of a message's annotations (written by the Worker). */
 export function extractCourses(annotations?: unknown[]): RetrievedSection[] {
@@ -61,40 +71,58 @@ function SectionLabel({ children }: { children: string }) {
 }
 
 export function GradeBar({ grades }: { grades: Record<string, number> | null }) {
-  const total = grades ? BUCKETS.reduce((n, b) => n + (grades[b] ?? 0), 0) : 0;
+  const total = grades ? GRADE_BUCKETS.reduce((n, b) => n + (grades[b] ?? 0), 0) : 0;
   if (!grades || !total) return <span className="text-xs text-muted-foreground">No grade data</span>;
-  
-  const parts = BUCKETS.map((b) => {
+
+  const gpa = computeGpa(grades);
+  const seg = GRADE_BUCKETS.map((b) => {
     const count = grades[b] ?? 0;
     return { b, count, width: (count / total) * 100, pct: Math.round((count / total) * 100) };
   });
+
   return (
-    <div>
+    <div className="space-y-2">
+      {gpa != null && (
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-lg font-bold tabular-nums text-foreground">{gpa.toFixed(2)}</span>
+          <span className="text-xs text-muted-foreground">avg GPA · {total.toLocaleString()} grades</span>
+        </div>
+      )}
       <div className="flex h-2.5 w-full overflow-hidden rounded-full">
-        {parts.map((p) => (
-          <Tooltip key={p.b}>
-            <TooltipTrigger asChild>
-              <motion.div
-                className={BUCKET_COLOR[p.b] ?? "bg-muted"}
-                initial={false}
-                animate={{ width: `${p.width}%` }}
-                transition={{ duration: 0.35, ease: "easeInOut" }}
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              {p.count} {p.count === 1 ? "student" : "students"} received {p.b == "A" ? "an" : "a"} {p.b}
-            </TooltipContent>
-          </Tooltip>
-        ))}
-      </div>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-        {parts
-          .filter((p) => p.pct > 0)
+        {seg
+          .filter((p) => p.width > 0)
           .map((p) => (
-            <span key={p.b}>
-              <span className="font-semibold text-foreground">{p.b}</span> {p.pct}%
-            </span>
+            <Tooltip key={p.b}>
+              <TooltipTrigger asChild>
+                <motion.div
+                  className={GRADE_COLOR[p.b] ?? "bg-muted"}
+                  initial={false}
+                  animate={{ width: `${p.width}%` }}
+                  transition={{ duration: 0.35, ease: "easeInOut" }}
+                />
+              </TooltipTrigger>
+              <TooltipContent>
+                {p.count.toLocaleString()} {p.count === 1 ? "student" : "students"} · {p.b}
+              </TooltipContent>
+            </Tooltip>
           ))}
+      </div>
+      <div className="space-y-0.5">
+        {FAMILY_ROWS.map((row, i) => {
+          const cells = row
+            .map((b) => seg.find((s) => s.b === b))
+            .filter((s): s is (typeof seg)[number] => !!s && s.count > 0);
+          if (!cells.length) return null;
+          return (
+            <div key={i} className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              {cells.map((p) => (
+                <span key={p.b} className="tabular-nums">
+                  <span className="font-semibold text-foreground">{p.b}</span> {p.pct}%
+                </span>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -110,7 +138,7 @@ function semesterValue(s: string): number {
 function sumGrades(list: SemesterGrades[]): Record<string, number> {
   const total: Record<string, number> = {};
   for (const { grades } of list) {
-    for (const b of BUCKETS) total[b] = (total[b] ?? 0) + (grades?.[b] ?? 0);
+    for (const b of GRADE_BUCKETS) total[b] = (total[b] ?? 0) + (grades?.[b] ?? 0);
   }
   return total;
 }

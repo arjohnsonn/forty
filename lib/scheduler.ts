@@ -4,6 +4,7 @@ import {
   parseDays,
   parseHourRange,
   courseCode,
+  computeGpa,
   type RetrievedSection,
   type CourseSection,
   type TimeBlock,
@@ -34,13 +35,14 @@ export type SchedulerPrefs = {
 
 type Meeting = { days: number[]; startMin: number; endMin: number };
 
-/** One placeable section + its parsed meetings, a 0–1 quality score, and a 0–1 ease (A-rate) score. */
+/** One placeable section + its parsed meetings, a 0–1 quality score, a 0–1 ease score, and avg GPA. */
 type Candidate = {
   course: RetrievedSection;
   section: CourseSection;
   meetings: Meeting[];
   quality: number;
   ease: number;
+  gpa: number | null;
 };
 
 export type ScheduledPick = {
@@ -62,8 +64,10 @@ export type GeneratedSchedule = {
   earliestStart: number | null;
   /** Latest class end across the week (minute-of-day), or null if all online. */
   latestEnd: number | null;
-  /** Mean 0–1 historical A-rate across the picks (neutral 0.5 when unknown). */
+  /** Mean 0–1 grade leniency across the picks (avg GPA / 4; neutral 0.5 when unknown). */
   ease: number;
+  /** Mean average GPA (0–4) across the picks where grades are known, or null. */
+  gpa: number | null;
 };
 
 export type SchedulerResult = {
@@ -77,14 +81,13 @@ export type SchedulerResult = {
   truncated: boolean;
 };
 
-const GRADE_KEYS = ["A", "B", "C", "D", "F", "Other"] as const;
 const MAX_RESULTS = 60; // keep the best N after ranking (UI shows ~10)
 const MAX_NODES = 200_000; // search-budget guard so a huge catalog can't hang the tab
 
-const aRate = (g: Record<string, number> | null | undefined): number | null => {
-  if (!g) return null;
-  const total = GRADE_KEYS.reduce((s, k) => s + (Number(g[k]) || 0), 0);
-  return total > 0 ? (Number(g.A) || 0) / total : null;
+// 0–1 grade leniency from average GPA (gpa / 4) — counts +/- grades, unlike the old A-rate. null when unknown.
+const gradeScore = (g: Record<string, number> | null | undefined): number | null => {
+  const gpa = computeGpa(g);
+  return gpa == null ? null : gpa / 4;
 };
 
 const meetingsOf = (sec: {
@@ -138,7 +141,7 @@ const passesPrefs = (meetings: Meeting[], prefs: SchedulerPrefs): boolean => {
 };
 
 // 0–1 quality for the section's professor(s): blend of RMP rating, CES instructor rating, and A-rate. Neutral 0.5 when nothing is known so a data-less section isn't unfairly buried.
-const sectionQuality = (
+export const sectionQuality = (
   course: RetrievedSection,
   section: CourseSection,
 ): number => {
@@ -149,9 +152,9 @@ const sectionQuality = (
   const signals: number[] = [];
 
   const ig = find(course.instructor_grades);
-  const ar =
-    aRate(ig as unknown as Record<string, number>) ?? aRate(course.grade_data);
-  if (ar != null) signals.push(ar);
+  const gs =
+    gradeScore(ig as unknown as Record<string, number>) ?? gradeScore(course.grade_data);
+  if (gs != null) signals.push(gs);
 
   const rmp = find(course.professor_ratings);
   if (rmp?.rmpRating != null) signals.push(rmp.rmpRating / 5);
@@ -164,8 +167,8 @@ const sectionQuality = (
     : 0.5;
 };
 
-// 0–1 ease for the section's professor(s): historical A-rate alone (neutral 0.5 when unknown). Used by the "easiest" rank, kept separate from quality so "most A's" differs from "best professor".
-const sectionEase = (
+// 0–1 ease for the section's professor(s): grade leniency (avg GPA / 4) alone (neutral 0.5 when unknown). Used by the "easiest" rank, kept separate from quality so "highest GPA" differs from "best professor".
+export const sectionEase = (
   course: RetrievedSection,
   section: CourseSection,
 ): number => {
@@ -174,9 +177,23 @@ const sectionEase = (
     names.includes(x.instructor),
   );
   return (
-    aRate(ig as unknown as Record<string, number>) ??
-    aRate(course.grade_data) ??
+    gradeScore(ig as unknown as Record<string, number>) ??
+    gradeScore(course.grade_data) ??
     0.5
+  );
+};
+
+// Average GPA (0–4) for the section's professor(s): the instructor's own grades when known, else the course-wide distribution. null when no grades.
+export const sectionGpa = (
+  course: RetrievedSection,
+  section: CourseSection,
+): number | null => {
+  const names = section.instructors ?? [];
+  const ig = (course.instructor_grades ?? []).find((x) =>
+    names.includes(x.instructor),
+  );
+  return (
+    computeGpa(ig as unknown as Record<string, number>) ?? computeGpa(course.grade_data)
   );
 };
 
@@ -227,6 +244,8 @@ const score = (
   const ease = picks.length
     ? picks.reduce((s, p) => s + p.ease, 0) / picks.length
     : 0.5;
+  const gpaVals = picks.map((p) => p.gpa).filter((g): g is number => g != null);
+  const gpa = gpaVals.length ? gpaVals.reduce((s, x) => s + x, 0) / gpaVals.length : null;
   const compactness = 1 - Math.min(gapMinutes, 480) / 480; // cap influence at 8h of gaps
   const freeDays = Math.min(daysOff.length / 3, 1); // 3+ class-free weekdays → max
   // Later first class is "better" for the earliest-finish-averse; 8:00→0, 11:00+→1.
@@ -253,6 +272,7 @@ const score = (
     earliestStart: earliest,
     latestEnd: latest,
     ease,
+    gpa,
   };
 };
 
@@ -285,6 +305,7 @@ export function generateSchedules(
         meetings,
         quality: sectionQuality(course, section),
         ease: sectionEase(course, section),
+        gpa: sectionGpa(course, section),
       });
     }
     if (candidates.length) groups.push({ code, candidates });

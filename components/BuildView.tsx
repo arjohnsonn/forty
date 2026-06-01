@@ -629,13 +629,6 @@ function ResultCard({
     : "None";
   const more: { k: string; v: string; info?: string }[] = [
     {
-      k: "Avg A-rate",
-      v: Number.isFinite(sched.ease)
-        ? `${Math.round(sched.ease * 100)}%`
-        : "N/A",
-      info: "Average share of A grades these professors gave in past semesters. Higher means more lenient grading.",
-    },
-    {
       k: "Earliest class",
       v: sched.earliestStart != null ? minuteLabel(sched.earliestStart) : "None",
     },
@@ -653,6 +646,11 @@ function ResultCard({
           <span className="font-semibold">Prof:</span>{" "}
           {(sched.quality * 5).toFixed(1)}/5
         </span>
+        {sched.gpa != null && (
+          <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
+            <span className="font-semibold">GPA:</span> {sched.gpa.toFixed(2)}
+          </span>
+        )}
         <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
           <span className="font-semibold">Off:</span> {off}
         </span>

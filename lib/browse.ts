@@ -153,6 +153,29 @@ export async function fetchCourseDetail(
   return groupCourseSections(rows);
 }
 
+// Full detail for a course by code ("C S 314") via sections_by_codes — for chat schedule-card clicks.
+export async function fetchCourseByCode(
+  supabase: SupabaseClient,
+  code: string
+): Promise<RetrievedSection | null> {
+  const { data, error } = await supabase.rpc("sections_by_codes", { p_codes: [code] });
+  if (error) throw error;
+  const rows = (data ?? []) as CourseDetailRow[];
+  if (!rows.length) return null;
+  return groupCourseSections(rows);
+}
+
+// Full detail for the SPECIFIC course a section belongs to — section_id pins the topic for shared numbers (UGS 303 / C S 378).
+export async function fetchCourseBySection(
+  supabase: SupabaseClient,
+  sectionId: number
+): Promise<RetrievedSection | null> {
+  const { data } = await supabase.from("sections").select("course_id").eq("id", sectionId).maybeSingle();
+  const courseId = (data as { course_id: number } | null)?.course_id;
+  if (courseId == null) return null;
+  return fetchCourseDetail(supabase, courseId);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Professors
 // ---------------------------------------------------------------------------------------------
