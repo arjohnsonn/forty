@@ -102,7 +102,7 @@ const sectionOf = (r: CourseDetailRow): CourseSection => ({
 
 // Collapse a course's per-section rows into the single RetrievedSection the course card expects:
 // every section under course_sections, with per-professor grades/evals/RMP merged across them
-// (deduped by professor) — the same shape the chat Worker produces.
+// (deduped by professor) - the same shape the chat Worker produces.
 function groupCourseSections(rows: CourseDetailRow[]): RetrievedSection {
   const rep = rows[0]!;
   const igByInstructor = new Map<string, NonNullable<RetrievedSection["instructor_grades"]>[number]>();
@@ -153,7 +153,7 @@ export async function fetchCourseDetail(
   return groupCourseSections(rows);
 }
 
-// Full detail for a course by code ("C S 314") via sections_by_codes — for chat schedule-card clicks.
+// Full detail for a course by code ("C S 314") via sections_by_codes - for chat schedule-card clicks.
 export async function fetchCourseByCode(
   supabase: SupabaseClient,
   code: string
@@ -165,7 +165,7 @@ export async function fetchCourseByCode(
   return groupCourseSections(rows);
 }
 
-// Full detail for the SPECIFIC course a section belongs to — section_id pins the topic for shared numbers (UGS 303 / C S 378).
+// Full detail for the SPECIFIC course a section belongs to - section_id pins the topic for shared numbers (UGS 303 / C S 378).
 export async function fetchCourseBySection(
   supabase: SupabaseClient,
   sectionId: number

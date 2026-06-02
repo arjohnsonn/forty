@@ -111,7 +111,7 @@ const LATEST_OPTS: Opt<number | null>[] = [
   { label: "7 PM", value: 19 * 60 },
   { label: "9 PM", value: 21 * 60 },
 ];
-// "Sort by" picks the dimension; the direction toggle picks order using labels that fit the dimension (gaps reads "Fewest/Most", professors "Best/Worst") — never an ambiguous "best/worst".
+// "Sort by" picks the dimension; the direction toggle picks order using labels that fit the dimension (gaps reads "Fewest/Most", professors "Best/Worst") - never an ambiguous "best/worst".
 type SortCat = {
   id: string;
   label: string;
@@ -120,11 +120,41 @@ type SortCat = {
   ascLabel: string;
 };
 const SORT_CATS: SortCat[] = [
-  { id: "best", label: "Professor Rating", rank: "best", descLabel: "Best first", ascLabel: "Worst first" },
-  { id: "easiest", label: "A's", rank: "easiest", descLabel: "Most A's", ascLabel: "Fewest A's" },
-  { id: "daysoff", label: "Days Off", rank: "daysoff", descLabel: "Most Days Off", ascLabel: "Fewest Days Off" },
-  { id: "compact", label: "Gaps", rank: "compact", descLabel: "Fewest Gaps", ascLabel: "Most Gaps" },
-  { id: "earliest", label: "Start Time", rank: "earliest", descLabel: "Latest", ascLabel: "Earliest" },
+  {
+    id: "best",
+    label: "Professor Rating",
+    rank: "best",
+    descLabel: "Best first",
+    ascLabel: "Worst first",
+  },
+  {
+    id: "easiest",
+    label: "A's",
+    rank: "easiest",
+    descLabel: "Most A's",
+    ascLabel: "Fewest A's",
+  },
+  {
+    id: "daysoff",
+    label: "Days Off",
+    rank: "daysoff",
+    descLabel: "Most Days Off",
+    ascLabel: "Fewest Days Off",
+  },
+  {
+    id: "compact",
+    label: "Gaps",
+    rank: "compact",
+    descLabel: "Fewest Gaps",
+    ascLabel: "Most Gaps",
+  },
+  {
+    id: "earliest",
+    label: "Start Time",
+    rank: "earliest",
+    descLabel: "Latest",
+    ascLabel: "Earliest",
+  },
 ];
 const SORT_CAT_OPTS: Opt<string>[] = SORT_CATS.map((c) => ({
   value: c.id,
@@ -151,7 +181,7 @@ const writePresets = (presets: Preset[]) => {
   try {
     window.localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
   } catch {
-    /* storage disabled or full — presets just won't persist */
+    /* storage disabled or full - presets just won't persist */
   }
 };
 
@@ -178,7 +208,7 @@ function Pill({
   );
 }
 
-// A compact labeled single-select (styled like the "Add to" trigger) — scales to many options without the pill-row clutter.
+// A compact labeled single-select (styled like the "Add to" trigger) - scales to many options without the pill-row clutter.
 function SelectMenu<T extends string | number | null>({
   label,
   value,
@@ -344,7 +374,7 @@ function MiniGrid({
 
   return (
     <div>
-      {/* Time gutter is the first cell of the SAME grid row as the day cells, so labels and the per-cell hour lines share one height/top — they line up with no cross-container offset. */}
+      {/* Time gutter is the first cell of the SAME grid row as the day cells, so labels and the per-cell hour lines share one height/top - they line up with no cross-container offset. */}
       <div
         className="grid h-28 gap-0.5"
         style={{ gridTemplateColumns: `1.25rem ${gridCols(cols.length)}` }}
@@ -630,7 +660,8 @@ function ResultCard({
   const more: { k: string; v: string; info?: string }[] = [
     {
       k: "Earliest class",
-      v: sched.earliestStart != null ? minuteLabel(sched.earliestStart) : "None",
+      v:
+        sched.earliestStart != null ? minuteLabel(sched.earliestStart) : "None",
     },
     {
       k: "Latest class",
@@ -719,7 +750,7 @@ export default function BuildView() {
   const [searching, setSearching] = useState(false);
   const reqId = useRef(0);
 
-  // The results list is position:fixed (anchored to the input via its rect) so it floats over the page without resizing it — and fixed escapes the scroll container's overflow clipping.
+  // The results list is position:fixed (anchored to the input via its rect) so it floats over the page without resizing it - and fixed escapes the scroll container's overflow clipping.
   const inputWrapRef = useRef<HTMLDivElement>(null);
   const [menuRect, setMenuRect] = useState<{
     top: number;
@@ -734,7 +765,7 @@ export default function BuildView() {
     setMenuRect({ top: r.bottom + 4, left: r.left, width: r.width });
   }, []);
 
-  // Recompute while the list is open; reposition on scroll/resize (no polling — listeners only).
+  // Recompute while the list is open; reposition on scroll/resize (no polling - listeners only).
   useEffect(() => {
     if (!results.length) {
       setMenuRect(null);
@@ -759,7 +790,8 @@ export default function BuildView() {
   const [latest, setLatest] = useState<number | null>(null);
   const [daysOff, setDaysOff] = useState<number[]>([]);
   const [gapRange, setGapRange] = useState<[number, number]>(GAP_RANGE);
-  const [ratingRange, setRatingRange] = useState<[number, number]>(RATING_RANGE);
+  const [ratingRange, setRatingRange] =
+    useState<[number, number]>(RATING_RANGE);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [savePresetOpen, setSavePresetOpen] = useState(false);
@@ -785,7 +817,7 @@ export default function BuildView() {
 
   const chooseTarget = (id: string | null) => {
     setTargetId(id);
-    setGenerated(null); // fixed constraints changed — prior results are stale
+    setGenerated(null); // fixed constraints changed - prior results are stale
   };
 
   useEffect(() => {
@@ -985,7 +1017,7 @@ export default function BuildView() {
     generatedOnce.current = true;
   };
 
-  // After the first generation, changing any filter or the sort re-generates automatically (sliders commit on release, so this fires once per change — not on every drag tick).
+  // After the first generation, changing any filter or the sort re-generates automatically (sliders commit on release, so this fires once per change - not on every drag tick).
   useEffect(() => {
     if (!generatedOnce.current || !ready || !newDetails.length) return;
     onGenerate();
@@ -1267,7 +1299,9 @@ export default function BuildView() {
                 ) : (
                   <ArrowUpNarrowWide className="h-3.5 w-3.5 opacity-70" />
                 )}
-                {sortDir === "desc" ? sortCatObj.descLabel : sortCatObj.ascLabel}
+                {sortDir === "desc"
+                  ? sortCatObj.descLabel
+                  : sortCatObj.ascLabel}
               </button>
               <button
                 type="button"

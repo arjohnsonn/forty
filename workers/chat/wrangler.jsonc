@@ -16,5 +16,11 @@
   "vars": {
     "ALLOWED_ORIGINS": "https://utrgpt.vercel.app,http://localhost:3000",
     "MATCH_THRESHOLD": "0.5",
+    // Monthly AI budgets (USD): small free allowance vs large Pro allowance, + gemini-2.5-flash
+    // token rates ($/1M tokens) used to meter spend.
+    "FREE_BUDGET_USD": "0.1",
+    "PRO_BUDGET_USD": "5",
+    "GEMINI_INPUT_USD_PER_1M": "0.3",
+    "GEMINI_OUTPUT_USD_PER_1M": "2.5",
   },
 }

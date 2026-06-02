@@ -38,16 +38,22 @@ export type ScheduleOption = {
 export function extractSchedules(annotations?: unknown[]): ScheduleOption[] {
   const a = (annotations ?? []).find(
     (x): x is { type: string; options: ScheduleOption[] } =>
-      !!x && typeof x === "object" && (x as { type?: string }).type === "schedule"
+      !!x &&
+      typeof x === "object" &&
+      (x as { type?: string }).type === "schedule",
   );
   return a?.options ?? [];
 }
 
 /** Full course detail (for the click-through dialog) carried alongside the options. */
-export function extractScheduleCourses(annotations?: unknown[]): RetrievedSection[] {
+export function extractScheduleCourses(
+  annotations?: unknown[],
+): RetrievedSection[] {
   const a = (annotations ?? []).find(
     (x): x is { type: string; courses?: RetrievedSection[] } =>
-      !!x && typeof x === "object" && (x as { type?: string }).type === "schedule"
+      !!x &&
+      typeof x === "object" &&
+      (x as { type?: string }).type === "schedule",
   );
   return a?.courses ?? [];
 }
@@ -57,7 +63,7 @@ const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOUR_PX = 48;
 
-// Read-only week preview of one schedule — mirrors BuildView's PreviewGrid, fit to the actual class hours.
+// Read-only week preview of one schedule - mirrors BuildView's PreviewGrid, fit to the actual class hours.
 function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
   const [supabase] = useState(() => createClient());
   const [selected, setSelected] = useState<RetrievedSection | null>(null);
@@ -102,14 +108,29 @@ function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
         if (!r || !dd.length) continue;
         placed = true;
         for (const d of dd)
-          blocks.push({ day: d, startMin: r.startMin, endMin: r.endMin, code, prof, location: (m.location ?? "").trim(), colorIdx, source: s });
+          blocks.push({
+            day: d,
+            startMin: r.startMin,
+            endMin: r.endMin,
+            code,
+            prof,
+            location: (m.location ?? "").trim(),
+            colorIdx,
+            source: s,
+          });
       }
       if (!placed) online.push(code);
     });
     const used = new Set(blocks.map((b) => b.day));
-    const days = [5, 6].some((d) => used.has(d)) ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4];
-    const minH = blocks.length ? Math.floor(Math.min(...blocks.map((b) => b.startMin)) / 60) : 8;
-    const maxH = blocks.length ? Math.ceil(Math.max(...blocks.map((b) => b.endMin)) / 60) : 18;
+    const days = [5, 6].some((d) => used.has(d))
+      ? [0, 1, 2, 3, 4, 5, 6]
+      : [0, 1, 2, 3, 4];
+    const minH = blocks.length
+      ? Math.floor(Math.min(...blocks.map((b) => b.startMin)) / 60)
+      : 8;
+    const maxH = blocks.length
+      ? Math.ceil(Math.max(...blocks.map((b) => b.endMin)) / 60)
+      : 18;
     return { blocks, days, online, minH, maxH };
   }, [sections]);
 
@@ -120,77 +141,105 @@ function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
   return (
     <>
       <div className="rounded-md border p-2">
-      <div className="flex">
-        <div className="w-12 shrink-0" />
-        {days.map((d) => (
-          <div key={d} className="flex-1 pb-1 text-center text-[11px] font-medium text-muted-foreground">
-            {DAY_LABELS[d]}
-          </div>
-        ))}
-      </div>
-      <div className="flex" style={{ height: totalHeight }}>
-        <div className="relative w-12 shrink-0">
-          {hours.map((h, i) => (
-            <div
-              key={h}
-              className="absolute right-1.5 -translate-y-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
-              style={{ top: i * HOUR_PX }}
-            >
-              {i === 0 ? "" : minuteLabel(h * 60)}
-            </div>
-          ))}
-        </div>
-        <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+        <div className="flex">
+          <div className="w-12 shrink-0" />
           {days.map((d) => (
-            <div key={d} className="relative border-l" style={{ height: totalHeight }}>
-              {hours.map((h, i) => (
-                <div key={h} className="pointer-events-none absolute inset-x-0 border-t border-border/40" style={{ top: i * HOUR_PX }} />
-              ))}
-              {blocks
-                .filter((b) => b.day === d)
-                .map((b, i) => {
-                  const c = colorAt(b.colorIdx);
-                  const h = Math.max(((b.endMin - b.startMin) / 60) * HOUR_PX - 2, 18);
-                  return (
-                    <div
-                      key={i}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openCourse(b.source)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          openCourse(b.source);
-                        }
-                      }}
-                      className={cn(
-                        "absolute inset-x-0.5 cursor-pointer overflow-hidden rounded-md px-1.5 py-1 text-[11px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-texas/40",
-                        c.bg,
-                        c.text
-                      )}
-                      style={{ top: ((b.startMin - top0) / 60) * HOUR_PX + 1, height: h }}
-                      title={`${b.code}${b.prof ? ` - ${b.prof}` : ""} · ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}${b.location ? ` · ${b.location}` : ""}`}
-                    >
-                      <div className="truncate font-semibold">
-                        {b.code}
-                        {b.prof ? ` - ${b.prof}` : ""}
-                      </div>
-                      {h >= 30 && (
-                        <div className="truncate opacity-80">
-                          {minuteLabel(b.startMin)}–{minuteLabel(b.endMin)}
-                        </div>
-                      )}
-                      {b.location && h >= 44 && <div className="truncate opacity-60">{b.location}</div>}
-                    </div>
-                  );
-                })}
+            <div
+              key={d}
+              className="flex-1 pb-1 text-center text-[11px] font-medium text-muted-foreground"
+            >
+              {DAY_LABELS[d]}
             </div>
           ))}
         </div>
-      </div>
-      {online.length > 0 && (
-        <p className="mt-2 text-[11px] text-muted-foreground">No set meeting time: {online.join(", ")}</p>
-      )}
+        <div className="flex" style={{ height: totalHeight }}>
+          <div className="relative w-12 shrink-0">
+            {hours.map((h, i) => (
+              <div
+                key={h}
+                className="absolute right-1.5 -translate-y-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                style={{ top: i * HOUR_PX }}
+              >
+                {i === 0 ? "" : minuteLabel(h * 60)}
+              </div>
+            ))}
+          </div>
+          <div
+            className="grid flex-1"
+            style={{
+              gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {days.map((d) => (
+              <div
+                key={d}
+                className="relative border-l"
+                style={{ height: totalHeight }}
+              >
+                {hours.map((h, i) => (
+                  <div
+                    key={h}
+                    className="pointer-events-none absolute inset-x-0 border-t border-border/40"
+                    style={{ top: i * HOUR_PX }}
+                  />
+                ))}
+                {blocks
+                  .filter((b) => b.day === d)
+                  .map((b, i) => {
+                    const c = colorAt(b.colorIdx);
+                    const h = Math.max(
+                      ((b.endMin - b.startMin) / 60) * HOUR_PX - 2,
+                      18,
+                    );
+                    return (
+                      <div
+                        key={i}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openCourse(b.source)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openCourse(b.source);
+                          }
+                        }}
+                        className={cn(
+                          "absolute inset-x-0.5 cursor-pointer overflow-hidden rounded-md px-1.5 py-1 text-[11px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-texas/40",
+                          c.bg,
+                          c.text,
+                        )}
+                        style={{
+                          top: ((b.startMin - top0) / 60) * HOUR_PX + 1,
+                          height: h,
+                        }}
+                        title={`${b.code}${b.prof ? ` - ${b.prof}` : ""} · ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}${b.location ? ` · ${b.location}` : ""}`}
+                      >
+                        <div className="truncate font-semibold">
+                          {b.code}
+                          {b.prof ? ` - ${b.prof}` : ""}
+                        </div>
+                        {h >= 30 && (
+                          <div className="truncate opacity-80">
+                            {minuteLabel(b.startMin)}–{minuteLabel(b.endMin)}
+                          </div>
+                        )}
+                        {b.location && h >= 44 && (
+                          <div className="truncate opacity-60">
+                            {b.location}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            ))}
+          </div>
+        </div>
+        {online.length > 0 && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            No set meeting time: {online.join(", ")}
+          </p>
+        )}
       </div>
       <CourseDialog section={selected} onClose={closeDialog} />
     </>
@@ -228,14 +277,16 @@ function ScheduleCard({
         color: s.color ?? i,
         detail: s.detail ?? detailByCode.get(normCode(s.course_code)) ?? null,
       })),
-    [option.sections, detailByCode]
+    [option.sections, detailByCode],
   );
   const name = useMemo(() => {
     const codes = Array.from(new Set(sections.map((s) => s.course_code)));
     return codes.join(" · ").slice(0, 60) || `Schedule ${index + 1}`;
   }, [sections, index]);
 
-  const off = option.daysOff.length ? option.daysOff.map((d) => d.slice(0, 3)).join(" ") : "None";
+  const off = option.daysOff.length
+    ? option.daysOff.map((d) => d.slice(0, 3)).join(" ")
+    : "None";
   const gaps =
     option.gapHours >= 1
       ? `${String(option.gapHours).replace(/\.0$/, "")}h/week`
@@ -254,11 +305,14 @@ function ScheduleCard({
     toast({
       title: `Saved “${name}”`,
       description: `${sections.length} ${sections.length === 1 ? "course" : "courses"} · on your Calendar`,
-      action: ((
-        <ToastAction altText="View schedule" onClick={() => router.push("/calendar")}>
+      action: (
+        <ToastAction
+          altText="View schedule"
+          onClick={() => router.push("/calendar")}
+        >
           View
         </ToastAction>
-      ) as unknown) as ToastActionElement,
+      ) as unknown as ToastActionElement,
     });
   };
 
@@ -266,8 +320,12 @@ function ScheduleCard({
     <div className="rounded-lg border bg-background p-3">
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <span className="mr-0.5 text-xs font-semibold">Option {index + 1}</span>
-        {option.gpa != null && <Pill label="GPA" value={option.gpa.toFixed(2)} />}
-        {option.quality > 0 && <Pill label="Prof" value={`${(option.quality * 5).toFixed(1)}/5`} />}
+        {option.gpa != null && (
+          <Pill label="GPA" value={option.gpa.toFixed(2)} />
+        )}
+        {option.quality > 0 && (
+          <Pill label="Prof" value={`${(option.quality * 5).toFixed(1)}/5`} />
+        )}
         <Pill label="Days Off" value={off} />
         <Pill label="Gap" value={gaps} />
       </div>
@@ -276,12 +334,26 @@ function ScheduleCard({
 
       <div className="mt-2 flex justify-end">
         {state === "saved" ? (
-          <Button size="sm" variant="ghost" onClick={() => router.push("/calendar")} className="gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => router.push("/calendar")}
+            className="gap-1.5"
+          >
             <Check className="h-3.5 w-3.5" /> Saved · View on calendar
           </Button>
         ) : (
-          <Button size="sm" onClick={onSave} disabled={state === "saving"} className="gap-1.5 bg-texas text-white hover:bg-texas/90">
-            {state === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />}
+          <Button
+            size="sm"
+            onClick={onSave}
+            disabled={state === "saving"}
+            className="gap-1.5 bg-texas text-white hover:bg-texas/90"
+          >
+            {state === "saving" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CalendarPlus className="h-3.5 w-3.5" />
+            )}
             Save this schedule
           </Button>
         )}
@@ -290,18 +362,30 @@ function ScheduleCard({
   );
 }
 
-export default function ScheduleCards({ annotations }: { annotations?: unknown[] }) {
+export default function ScheduleCards({
+  annotations,
+}: {
+  annotations?: unknown[];
+}) {
   const options = extractSchedules(annotations);
   const courses = extractScheduleCourses(annotations);
   const detailByCode = useMemo(
-    () => new Map(courses.map((c) => [normCode(courseCode(c.course_header)), c] as const)),
-    [courses]
+    () =>
+      new Map(
+        courses.map((c) => [normCode(courseCode(c.course_header)), c] as const),
+      ),
+    [courses],
   );
   if (!options.length) return null;
   return (
     <div className="mt-3 space-y-3 not-prose">
       {options.map((o, i) => (
-        <ScheduleCard key={i} option={o} index={i} detailByCode={detailByCode} />
+        <ScheduleCard
+          key={i}
+          option={o}
+          index={i}
+          detailByCode={detailByCode}
+        />
       ))}
     </div>
   );

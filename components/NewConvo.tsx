@@ -35,7 +35,7 @@ const randomGreetings = [
 ];
 
 // Each starter opens a dialog that collects its fields, then `compose()` builds the prompt
-// from the entered values (which is dropped into the input — not sent automatically).
+// from the entered values (which is dropped into the input - not sent automatically).
 type StarterField = {
   key: string;
   label: string;
@@ -308,7 +308,7 @@ const NewConvo = ({ onSubmit }: Props) => {
           <DialogOverlay />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             {/* Built from primitives (not the shared DialogContent) so its overflow stays
-                visible — the course autocomplete dropdown can extend past the dialog. */}
+                visible - the course autocomplete dropdown can extend past the dialog. */}
             <DialogPrimitive.Content
               aria-describedby={undefined}
               onCloseAutoFocus={(e) => {

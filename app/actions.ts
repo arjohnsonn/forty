@@ -3,6 +3,7 @@
 import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { getStripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -16,7 +17,7 @@ export const signUpAction = async (formData: FormData) => {
     return encodedRedirect(
       "error",
       "/sign-up",
-      "Email and password are required"
+      "Email and password are required",
     );
   }
 
@@ -35,7 +36,7 @@ export const signUpAction = async (formData: FormData) => {
     return encodedRedirect(
       "success",
       "/sign-up",
-      "Thanks for signing up! Please check your email for a verification link."
+      "Thanks for signing up! Please check your email for a verification link.",
     );
   }
 };
@@ -77,7 +78,7 @@ export const forgotPasswordAction = async (formData: FormData) => {
     return encodedRedirect(
       "error",
       "/forgot-password",
-      "Could not reset password"
+      "Could not reset password",
     );
   }
 
@@ -88,7 +89,7 @@ export const forgotPasswordAction = async (formData: FormData) => {
   return encodedRedirect(
     "success",
     "/forgot-password",
-    "Check your email for a link to reset your password."
+    "Check your email for a link to reset your password.",
   );
 };
 
@@ -102,7 +103,7 @@ export const resetPasswordAction = async (formData: FormData) => {
     encodedRedirect(
       "error",
       "/protected/reset-password",
-      "Password and confirm password are required"
+      "Password and confirm password are required",
     );
   }
 
@@ -110,7 +111,7 @@ export const resetPasswordAction = async (formData: FormData) => {
     encodedRedirect(
       "error",
       "/protected/reset-password",
-      "Passwords do not match"
+      "Passwords do not match",
     );
   }
 
@@ -122,7 +123,7 @@ export const resetPasswordAction = async (formData: FormData) => {
     encodedRedirect(
       "error",
       "/protected/reset-password",
-      "Password update failed"
+      "Password update failed",
     );
   }
 
@@ -142,7 +143,7 @@ export const deleteAccountAction = async () => {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
-  // Bail before deleting anything if the admin client can't be built (missing service key) —
+  // Bail before deleting anything if the admin client can't be built (missing service key) -
   // otherwise we'd wipe the user's rows but be unable to delete the account.
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
     return { error: "Couldn't delete account. Try again." };
@@ -165,6 +166,41 @@ export const deleteAccountAction = async () => {
 
   await supabase.auth.signOut();
   return redirect("/");
+};
+
+// One-time $3.99 Pro semester pass. Inline price (no dashboard product needed); the webhook
+// reads metadata.user_id to grant Pro. Returns the hosted Checkout URL for the client to open.
+export const createCheckoutSession = async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  const origin = (await headers()).get("origin") ?? "";
+  try {
+    const session = await getStripe().checkout.sessions.create({
+      mode: "payment",
+      customer_email: user.email ?? undefined,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: 399,
+            product_data: { name: "Forty Pro - Semester Pass" },
+          },
+        },
+      ],
+      metadata: { user_id: user.id },
+      success_url: `${origin}/?upgraded=1`,
+      cancel_url: `${origin}/`,
+    });
+    return { url: session.url };
+  } catch (e) {
+    console.error("checkout error:", e);
+    return { error: "Couldn't start checkout. Try again." };
+  }
 };
 
 // Add Google OAuth action

@@ -20,7 +20,7 @@ export default function NewChat() {
     window.history.replaceState(null, "", "/");
   };
 
-  // "New chat" in the sidebar fires this — reset the in-place conversation back to the landing UI
+  // "New chat" in the sidebar fires this - reset the in-place conversation back to the landing UI
   // (the router can't navigate to "/" when it already thinks it's there after an in-place start).
   useEffect(() => {
     const onNewChat = () => resetToLanding();
@@ -49,7 +49,7 @@ export default function NewChat() {
     }
 
     // Switch to the conversation UI immediately and update the URL, then create the row in the
-    // background — no waiting on the insert + a server round-trip before the message appears. The
+    // background - no waiting on the insert + a server round-trip before the message appears. The
     // client-generated id matches the row we insert, and the Worker persists by that id on finish
     // (which happens seconds later, well after the insert lands).
     const id = crypto.randomUUID();

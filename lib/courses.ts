@@ -95,7 +95,7 @@ export function letterTotals(grades: Record<string, number> | null | undefined):
   };
 }
 
-/** A section's parallel schedule arrays (structural — `CourseSection` satisfies it). */
+/** A section's parallel schedule arrays (structural - `CourseSection` satisfies it). */
 export type ScheduleArrays = {
   schedule_days: string[] | null;
   schedule_hours: string[] | null;
@@ -154,7 +154,7 @@ export function parseHourRange(raw: string): { startMin: number; endMin: number 
   const m = (raw ?? "").match(TIME_RANGE);
   if (!m) return null;
   const endMer = m[6];
-  // Prose may omit the start meridiem ("10–11am") — infer from the end, fix if start lands after end.
+  // Prose may omit the start meridiem ("10–11am") - infer from the end, fix if start lands after end.
   let startMin = toMinutes(m[1]!, m[2], m[3] || endMer);
   const endMin = toMinutes(m[4]!, m[5], endMer);
   if (!m[3] && startMin >= endMin) {
@@ -401,7 +401,7 @@ export function toScheduleSection(s: RetrievedSection, sec: CourseSection): Sche
   };
 }
 
-// Minimal RetrievedSection — dialog fallback for items saved before `detail` existed.
+// Minimal RetrievedSection - dialog fallback for items saved before `detail` existed.
 export function scheduleSectionToRetrieved(s: ScheduleSection): RetrievedSection {
   const arrays = {
     schedule_days: s.meetings.map((m) => m.days),

@@ -22,7 +22,11 @@ import { Button } from "@/components/ui/button";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { useToast } from "@/components/hooks/use-toast";
 import { useSchedules, type ScheduleRow } from "@/lib/schedules";
-import { sectionBlockConflicts, sectionCourseConflicts, type ScheduleSection } from "@/lib/courses";
+import {
+  sectionBlockConflicts,
+  sectionCourseConflicts,
+  type ScheduleSection,
+} from "@/lib/courses";
 import { cn } from "@/lib/utils";
 
 /** Courses + time blocks in `s` that this section would overlap. */
@@ -39,17 +43,22 @@ export default function AddToSchedule({
   section: ScheduleSection;
   className?: string;
 }) {
-  const { schedules, createSchedule, addSection, removeSection } = useSchedules();
+  const { schedules, createSchedule, addSection, removeSection } =
+    useSchedules();
   const { toast } = useToast();
   const router = useRouter();
-  const [pending, setPending] = useState<{ id: string; name: string; conflicts: string[] } | null>(null);
+  const [pending, setPending] = useState<{
+    id: string;
+    name: string;
+    conflicts: string[];
+  } | null>(null);
 
   const addTo = async (id: string, name: string) => {
     await addSection(id, section);
     toast({
       title: `Added to ${name}`,
       description: `${section.course_code} · #${section.section_id}`,
-      action: ((
+      action: (
         <div className="flex gap-2">
           <ToastAction
             altText="Undo add"
@@ -60,11 +69,14 @@ export default function AddToSchedule({
           >
             Undo
           </ToastAction>
-          <ToastAction altText="Go to calendar" onClick={() => router.push("/calendar")}>
+          <ToastAction
+            altText="Go to calendar"
+            onClick={() => router.push("/calendar")}
+          >
             Go to
           </ToastAction>
         </div>
-      ) as unknown) as ToastActionElement,
+      ) as unknown as ToastActionElement,
     });
   };
 
@@ -82,12 +94,12 @@ export default function AddToSchedule({
 
   const createAndAdd = async () => {
     const created = await createSchedule(`Schedule ${schedules.length + 1}`);
-    if (created) addTo(created.id, created.name); // new schedule is empty — no conflicts
+    if (created) addTo(created.id, created.name); // new schedule is empty - no conflicts
   };
 
   const triggerClass = cn(
     "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-texas/40 align-middle text-texas transition-colors hover:bg-texas hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-texas/40",
-    className
+    className,
   );
 
   const trigger =
@@ -112,7 +124,12 @@ export default function AddToSchedule({
     ) : (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" title="Add to schedule" aria-label="Add to schedule" className={triggerClass}>
+          <button
+            type="button"
+            title="Add to schedule"
+            aria-label="Add to schedule"
+            className={triggerClass}
+          >
             <Plus className="h-3 w-3" />
           </button>
         </DropdownMenuTrigger>
@@ -121,7 +138,9 @@ export default function AddToSchedule({
             Add to schedule
           </DropdownMenuLabel>
           {schedules.map((s) => {
-            const has = s.sections.some((x) => x.section_id === section.section_id);
+            const has = s.sections.some(
+              (x) => x.section_id === section.section_id,
+            );
             const conflicts = conflictsIn(section, s);
             return (
               <DropdownMenuItem
@@ -164,8 +183,8 @@ export default function AddToSchedule({
           <DialogHeader>
             <DialogTitle>Schedule conflict</DialogTitle>
             <DialogDescription>
-              {section.course_code} overlaps {pending?.conflicts.join(", ")} in {pending?.name}. Add
-              it anyway?
+              {section.course_code} overlaps {pending?.conflicts.join(", ")} in{" "}
+              {pending?.name}. Add it anyway?
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">

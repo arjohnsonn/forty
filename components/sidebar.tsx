@@ -22,6 +22,10 @@ import {
   MoreHorizontal,
   LogOut,
   Settings,
+  Sparkles,
+  FileText,
+  ShieldCheck,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
@@ -46,6 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
+import { UpgradeDialog } from "@/components/upgrade-dialog";
 import { useToast } from "@/components/hooks/use-toast";
 import { signOutAction } from "@/app/actions";
 
@@ -106,10 +111,12 @@ export function Sidebar({
   userEmail,
   userName,
   userProvider,
+  userIsPro,
 }: {
   userEmail: string;
   userName: string;
   userProvider: string;
+  userIsPro: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -123,6 +130,7 @@ export function Sidebar({
   const [draftTitle, setDraftTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const fetchConversations = useCallback(async () => {
     const { data } = await supabase
@@ -142,7 +150,7 @@ export function Sidebar({
     );
   }, [supabase]);
 
-  // Live updates (insert/update/delete) via Realtime — no polling.
+  // Live updates (insert/update/delete) via Realtime - no polling.
   useEffect(() => {
     const channel = supabase
       .channel("sidebar-conversations")
@@ -412,6 +420,17 @@ export function Sidebar({
           </Section>
         </div>
 
+        {!userIsPro && (
+          <button
+            onClick={() => setUpgradeOpen(true)}
+            className="mx-2 mb-1 flex items-center gap-2 rounded-lg border border-texas/30 bg-texas/10 px-3 py-2 text-left text-sm font-medium text-texas transition-colors hover:bg-texas/20"
+          >
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate">Upgrade to Pro</span>
+            <span className="text-xs opacity-80">$3.99</span>
+          </button>
+        )}
+
         <div className="flex items-center gap-1 border-t border-foreground/10 p-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -435,6 +454,25 @@ export function Sidebar({
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/terms">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Terms
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/privacy">
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  Privacy
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/refund">
+                  <Receipt className="mr-2 h-4 w-4" />
+                  Refunds
+                </Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <ThemeSwitcher />
@@ -455,6 +493,8 @@ export function Sidebar({
         userName={userName}
         userProvider={userProvider}
       />
+
+      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
 
       <Dialog
         open={!!renameTarget}

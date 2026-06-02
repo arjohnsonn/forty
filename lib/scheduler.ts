@@ -83,14 +83,14 @@ export type SchedulerResult = {
   infeasible: string[];
   /** Course-code pairs whose every section pairing conflicts (a hint when nothing fits). */
   alwaysConflict: [string, string][];
-  /** True if the search hit its cap — results are a (good) sample, not exhaustive. */
+  /** True if the search hit its cap - results are a (good) sample, not exhaustive. */
   truncated: boolean;
 };
 
 const MAX_RESULTS = 60; // keep the best N after ranking (UI shows ~10)
 const MAX_NODES = 200_000; // search-budget guard so a huge catalog can't hang the tab
 
-// 0–1 grade leniency from average GPA (gpa / 4) — counts +/- grades, unlike the old A-rate. null when unknown.
+// 0–1 grade leniency from average GPA (gpa / 4) - counts +/- grades, unlike the old A-rate. null when unknown.
 const gradeScore = (
   g: Record<string, number> | null | undefined,
 ): number | null => {
@@ -291,7 +291,7 @@ const score = (
   };
 };
 
-// Generate ranked, conflict-free schedules from the desired courses. `fixed` is the set of already-scheduled sections to build AROUND (a target schedule's existing classes) — new sections that clash with them are discarded. Courses with no section left after the preferences/fixed are reported in `infeasible` and dropped (the rest are still scheduled), so the caller can explain the gap instead of silently returning nothing.
+// Generate ranked, conflict-free schedules from the desired courses. `fixed` is the set of already-scheduled sections to build AROUND (a target schedule's existing classes) - new sections that clash with them are discarded. Courses with no section left after the preferences/fixed are reported in `infeasible` and dropped (the rest are still scheduled), so the caller can explain the gap instead of silently returning nothing.
 export function generateSchedules(
   courses: RetrievedSection[],
   prefs: SchedulerPrefs = {},

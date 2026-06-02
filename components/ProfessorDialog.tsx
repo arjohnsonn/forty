@@ -179,7 +179,7 @@ export default function ProfessorDialog({
   const [rmpOpen, setRmpOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
-  // A course opened from the "Teaches this semester" list — its detail dialog stacks over this one.
+  // A course opened from the "Teaches this semester" list - its detail dialog stacks over this one.
   const [courseOpenId, setCourseOpenId] = useState<number | null>(null);
   const [courseDetail, setCourseDetail] = useState<RetrievedSection | null>(null);
   const courseRef = useRef<number | null>(null);
@@ -299,7 +299,7 @@ export default function ProfessorDialog({
       </DialogPortal>
     </Dialog>
 
-      {/* Course detail opened from a "Teaches this semester" card — stacks over this dialog. */}
+      {/* Course detail opened from a "Teaches this semester" card - stacks over this dialog. */}
       <CourseDialog
         section={courseDetail}
         loading={courseOpenId !== null && !courseDetail}

@@ -9,12 +9,25 @@ import {
   type TimeBlock,
 } from "@/lib/courses";
 
-export type ExportSchedule = { name: string; sections: ScheduleSection[]; blocks: TimeBlock[] };
+export type ExportSchedule = {
+  name: string;
+  sections: ScheduleSection[];
+  blocks: TimeBlock[];
+};
 
-const slug = (name: string) => name.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "schedule";
+const slug = (name: string) =>
+  name
+    .trim()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-|-$/g, "") || "schedule";
 
-function download(content: string | Blob, filename: string, type = "text/plain") {
-  const blob = content instanceof Blob ? content : new Blob([content], { type });
+function download(
+  content: string | Blob,
+  filename: string,
+  type = "text/plain",
+) {
+  const blob =
+    content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -27,9 +40,13 @@ const DAY_CODES = ["M", "T", "W", "Th", "F", "Sa", "Su"];
 
 export function exportJson(s: ExportSchedule) {
   download(
-    JSON.stringify({ name: s.name, sections: s.sections, blocks: s.blocks }, null, 2),
+    JSON.stringify(
+      { name: s.name, sections: s.sections, blocks: s.blocks },
+      null,
+      2,
+    ),
     `${slug(s.name)}.json`,
-    "application/json"
+    "application/json",
   );
 }
 
@@ -40,15 +57,21 @@ export function exportTxt(s: ExportSchedule) {
     if (sec.instructors.length) lines.push(`  ${sec.instructors.join(", ")}`);
     for (const m of sec.meetings) {
       const r = parseHourRange(m.hours);
-      const time = r ? `${minuteLabel(r.startMin)}–${minuteLabel(r.endMin)}` : m.hours || "TBA";
-      lines.push(`  ${m.days || "TBA"} ${time}${m.location ? ` · ${m.location}` : ""}`);
+      const time = r
+        ? `${minuteLabel(r.startMin)}–${minuteLabel(r.endMin)}`
+        : m.hours || "TBA";
+      lines.push(
+        `  ${m.days || "TBA"} ${time}${m.location ? ` · ${m.location}` : ""}`,
+      );
     }
     lines.push("");
   }
   if (s.blocks.length) {
     lines.push("Time blocks:");
     for (const b of s.blocks) {
-      lines.push(`  ${b.label}: ${b.days.map((d) => DAY_CODES[d]).join("")} ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}`);
+      lines.push(
+        `  ${b.label}: ${b.days.map((d) => DAY_CODES[d]).join("")} ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}`,
+      );
     }
   }
   download(lines.join("\n"), `${slug(s.name)}.txt`);
@@ -56,7 +79,8 @@ export function exportTxt(s: ExportSchedule) {
 
 // --- iCalendar (.ics) --------------------------------------------------------------------------
 const pad = (n: number) => String(n).padStart(2, "0");
-const escapeIcs = (v: string) => v.replace(/[\\;,]/g, (c) => "\\" + c).replace(/\n/g, "\\n");
+const escapeIcs = (v: string) =>
+  v.replace(/[\\;,]/g, (c) => "\\" + c).replace(/\n/g, "\\n");
 
 export function exportIcs(s: ExportSchedule) {
   // Anchor recurring events to the Monday of a representative Fall 2026 week; floating local time.
@@ -67,10 +91,18 @@ export function exportIcs(s: ExportSchedule) {
     d.setDate(base.getDate() + dayIdx);
     return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
   };
-  const timeFor = (min: number) => `${pad(Math.floor(min / 60))}${pad(min % 60)}00`;
+  const timeFor = (min: number) =>
+    `${pad(Math.floor(min / 60))}${pad(min % 60)}00`;
 
   const events: string[] = [];
-  const event = (uid: string, summary: string, location: string, dayIdx: number, startMin: number, endMin: number) =>
+  const event = (
+    uid: string,
+    summary: string,
+    location: string,
+    dayIdx: number,
+    startMin: number,
+    endMin: number,
+  ) =>
     events.push(
       [
         "BEGIN:VEVENT",
@@ -83,7 +115,7 @@ export function exportIcs(s: ExportSchedule) {
         "END:VEVENT",
       ]
         .filter(Boolean)
-        .join("\r\n")
+        .join("\r\n"),
     );
 
   for (const sec of s.sections) {
@@ -92,10 +124,20 @@ export function exportIcs(s: ExportSchedule) {
       const r = parseHourRange(m.hours);
       const days = parseDays(m.days);
       if (!r || !days.length) continue;
-      for (const d of days) event(`${sec.section_id}-${d}@forty`, summary, m.location, d, r.startMin, r.endMin);
+      for (const d of days)
+        event(
+          `${sec.section_id}-${d}@forty`,
+          summary,
+          m.location,
+          d,
+          r.startMin,
+          r.endMin,
+        );
     }
   }
-  for (const b of s.blocks) for (const d of b.days) event(`${b.id}-${d}@forty`, b.label, "", d, b.startMin, b.endMin);
+  for (const b of s.blocks)
+    for (const d of b.days)
+      event(`${b.id}-${d}@forty`, b.label, "", d, b.startMin, b.endMin);
 
   const ics = [
     "BEGIN:VCALENDAR",
@@ -108,7 +150,7 @@ export function exportIcs(s: ExportSchedule) {
   download(ics, `${slug(s.name)}.ics`, "text/calendar");
 }
 
-// --- PNG (canvas) — mirrors the live WeeklyGrid (theme colors, translucent blocks, lanes) -------
+// --- PNG (canvas) - mirrors the live WeeklyGrid (theme colors, translucent blocks, lanes) -------
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOUR_H = 56;
 const GUTTER = 56;
@@ -118,7 +160,14 @@ const PAD = 16;
 const TITLE_H = 30;
 const HEADER_H = 34;
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   const rr = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
   ctx.moveTo(x + rr, y);
@@ -146,44 +195,116 @@ export function exportPng(s: ExportSchedule) {
   const C = {
     bg: tok("--background", dark ? "#0a0a0a" : "#ffffff"),
     fg: tok("--foreground", dark ? "#fafafa" : "#0a0a0a"),
-    header: tok("--muted", dark ? "rgba(38,38,38,.3)" : "rgba(245,245,245,.3)", 0.3),
+    header: tok(
+      "--muted",
+      dark ? "rgba(38,38,38,.3)" : "rgba(245,245,245,.3)",
+      0.3,
+    ),
     mutedFg: tok("--muted-foreground", dark ? "#a3a3a3" : "#737373"),
     border: tok("--border", dark ? "#262626" : "#e5e5e5"),
-    line: tok("--border", dark ? "rgba(38,38,38,.4)" : "rgba(229,229,229,.4)", 0.4),
-    blockBg: tok("--muted", dark ? "rgba(38,38,38,.6)" : "rgba(245,245,245,.6)", 0.6),
-    blockBorder: tok("--muted-foreground", dark ? "rgba(163,163,163,.3)" : "rgba(115,115,115,.3)", 0.3),
+    line: tok(
+      "--border",
+      dark ? "rgba(38,38,38,.4)" : "rgba(229,229,229,.4)",
+      0.4,
+    ),
+    blockBg: tok(
+      "--muted",
+      dark ? "rgba(38,38,38,.6)" : "rgba(245,245,245,.6)",
+      0.6,
+    ),
+    blockBorder: tok(
+      "--muted-foreground",
+      dark ? "rgba(163,163,163,.3)" : "rgba(115,115,115,.3)",
+      0.3,
+    ),
   };
 
   // Per day: lane out courses + time blocks together (side by side on overlap), like the grid.
-  type Placed = { dayIdx: number; startMin: number; endMin: number; lane: number; lanes: number; title: string; sub: string; idx: number | null; conflict: boolean };
+  type Placed = {
+    dayIdx: number;
+    startMin: number;
+    endMin: number;
+    lane: number;
+    lanes: number;
+    title: string;
+    sub: string;
+    idx: number | null;
+    conflict: boolean;
+  };
   const placed: Placed[] = [];
   for (let d = 0; d < COLS; d++) {
-    const courses: { startMin: number; endMin: number; code: string; location: string; idx: number; conflict: boolean }[] = [];
+    const courses: {
+      startMin: number;
+      endMin: number;
+      code: string;
+      location: string;
+      idx: number;
+      conflict: boolean;
+    }[] = [];
     for (const sec of s.sections) {
       const idx = colorIndexFor(sec);
       for (const m of sec.meetings) {
         const r = parseHourRange(m.hours);
-        if (r && parseDays(m.days).includes(d)) courses.push({ startMin: r.startMin, endMin: r.endMin, code: sec.course_code, location: m.location, idx, conflict: false });
+        if (r && parseDays(m.days).includes(d))
+          courses.push({
+            startMin: r.startMin,
+            endMin: r.endMin,
+            code: sec.course_code,
+            location: m.location,
+            idx,
+            conflict: false,
+          });
       }
     }
     for (let i = 0; i < courses.length; i++)
-      courses[i]!.conflict = courses.some((o, j) => j !== i && o.startMin < courses[i]!.endMin && courses[i]!.startMin < o.endMin);
-    const blocks = s.blocks.filter((b) => b.days.includes(d)).map((b) => ({ startMin: b.startMin, endMin: b.endMin, label: b.label }));
+      courses[i]!.conflict = courses.some(
+        (o, j) =>
+          j !== i &&
+          o.startMin < courses[i]!.endMin &&
+          courses[i]!.startMin < o.endMin,
+      );
+    const blocks = s.blocks
+      .filter((b) => b.days.includes(d))
+      .map((b) => ({ startMin: b.startMin, endMin: b.endMin, label: b.label }));
     const items = [
       ...courses.map((c) => ({ kind: "course" as const, ...c })),
       ...blocks.map((b) => ({ kind: "block" as const, ...b })),
     ];
     for (const it of assignLanes(items)) {
       if (it.kind === "course")
-        placed.push({ dayIdx: d, startMin: it.startMin, endMin: it.endMin, lane: it.lane, lanes: it.lanes, title: it.code, sub: it.location, idx: it.idx, conflict: it.conflict });
-      else placed.push({ dayIdx: d, startMin: it.startMin, endMin: it.endMin, lane: it.lane, lanes: it.lanes, title: it.label, sub: "", idx: null, conflict: false });
+        placed.push({
+          dayIdx: d,
+          startMin: it.startMin,
+          endMin: it.endMin,
+          lane: it.lane,
+          lanes: it.lanes,
+          title: it.code,
+          sub: it.location,
+          idx: it.idx,
+          conflict: it.conflict,
+        });
+      else
+        placed.push({
+          dayIdx: d,
+          startMin: it.startMin,
+          endMin: it.endMin,
+          lane: it.lane,
+          lanes: it.lanes,
+          title: it.label,
+          sub: "",
+          idx: null,
+          conflict: false,
+        });
     }
   }
 
   const starts = placed.map((p) => p.startMin);
   const ends = placed.map((p) => p.endMin);
-  const gridStart = Math.floor(Math.min(8 * 60, ...(starts.length ? starts : [8 * 60])) / 60) * 60;
-  const gridEnd = Math.ceil(Math.max(18 * 60, ...(ends.length ? ends : [18 * 60])) / 60) * 60;
+  const gridStart =
+    Math.floor(Math.min(8 * 60, ...(starts.length ? starts : [8 * 60])) / 60) *
+    60;
+  const gridEnd =
+    Math.ceil(Math.max(18 * 60, ...(ends.length ? ends : [18 * 60])) / 60) * 60;
 
   const bodyH = ((gridEnd - gridStart) / 60) * HOUR_H;
   const W = PAD * 2 + GUTTER + COLS * COL_W;
@@ -234,7 +355,12 @@ export function exportPng(s: ExportSchedule) {
   ctx.font = `500 12px ${font}`;
   ctx.fillStyle = C.mutedFg;
   ctx.textAlign = "center";
-  for (let d = 0; d < COLS; d++) ctx.fillText(DAY_LABELS[d]!, gx + d * COL_W + COL_W / 2, cardY + HEADER_H / 2);
+  for (let d = 0; d < COLS; d++)
+    ctx.fillText(
+      DAY_LABELS[d]!,
+      gx + d * COL_W + COL_W / 2,
+      cardY + HEADER_H / 2,
+    );
 
   // Hour lines + gutter labels
   ctx.font = `10px ${font}`;
@@ -271,7 +397,9 @@ export function exportPng(s: ExportSchedule) {
     const h = Math.max(((it.endMin - it.startMin) / 60) * HOUR_H - 2, 16);
     const isBlock = it.idx == null;
     const base = isBlock ? null : courseHexShade(it.idx!, 500);
-    const text = isBlock ? C.mutedFg : courseHexShade(it.idx!, dark ? 300 : 700);
+    const text = isBlock
+      ? C.mutedFg
+      : courseHexShade(it.idx!, dark ? 300 : 700);
 
     roundRect(ctx, x, y, w, h, 6);
     ctx.fillStyle = isBlock ? C.blockBg : hexAlpha(base!, 0.4);
@@ -295,8 +423,15 @@ export function exportPng(s: ExportSchedule) {
     ctx.fillText(it.title, x + 6, y + 11, w - 10);
     if (h > 26) {
       ctx.font = `10px ${font}`;
-      ctx.fillStyle = isBlock ? C.mutedFg : hexAlpha(courseHexShade(it.idx!, dark ? 300 : 700), 0.8);
-      ctx.fillText(`${minuteLabel(it.startMin)}–${minuteLabel(it.endMin)}`, x + 6, y + 25, w - 10);
+      ctx.fillStyle = isBlock
+        ? C.mutedFg
+        : hexAlpha(courseHexShade(it.idx!, dark ? 300 : 700), 0.8);
+      ctx.fillText(
+        `${minuteLabel(it.startMin)}–${minuteLabel(it.endMin)}`,
+        x + 6,
+        y + 25,
+        w - 10,
+      );
     }
     if (it.sub && h > 40) {
       ctx.fillStyle = C.mutedFg;

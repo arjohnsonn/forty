@@ -45,6 +45,12 @@ interface Env {
   ALLOWED_ORIGINS?: string;
   MATCH_THRESHOLD?: string;
   RMP_CACHE_TTL?: string;
+  // Monthly AI budgets (USD): a small free allowance, a large Pro allowance. Plus the
+  // gemini-2.5-flash token rates used to meter spend.
+  FREE_BUDGET_USD?: string;
+  PRO_BUDGET_USD?: string;
+  GEMINI_INPUT_USD_PER_1M?: string;
+  GEMINI_OUTPUT_USD_PER_1M?: string;
 }
 
 // Same model + dimension as scripts/embed.ts, or query and doc vectors won't match.
@@ -79,7 +85,7 @@ async function embedQuery(text: string, apiKey: string): Promise<number[]> {
   return normalize(data.embedding.values);
 }
 
-// Embed several queries in ONE batch request — avoids the rate-limit burst of parallel embedContent calls.
+// Embed several queries in ONE batch request - avoids the rate-limit burst of parallel embedContent calls.
 async function embedQueries(texts: string[], apiKey: string): Promise<number[][]> {
   if (!texts.length) return [];
   const res = await fetch(
@@ -104,7 +110,7 @@ async function embedQueries(texts: string[], apiKey: string): Promise<number[][]
 }
 
 // RateMyProfessors live refresh. The snapshot (scripts/rmp.ts) pins each professor to an
-// rmp_legacy_id; here we fetch that professor's *current* numbers by id (cheap, exact — no
+// rmp_legacy_id; here we fetch that professor's *current* numbers by id (cheap, exact - no
 // re-matching), short-cached at the edge, so a freshly-posted rating shows up without a re-scrape.
 const RMP_GQL = "https://www.ratemyprofessors.com/graphql";
 const RMP_AUTH = "Basic dGVzdDp0ZXN0"; // public hardcoded RMP web credential (test:test)
@@ -128,7 +134,7 @@ type RmpCourse = {
   numRatings: number;
 };
 
-// Below this many course-specific reviews the per-course average is too noisy — fall back to overall.
+// Below this many course-specific reviews the per-course average is too noisy - fall back to overall.
 const MIN_COURSE_RATINGS = 3;
 
 // "CH 302 PRINCIPLES OF CHEMISTRY" -> "CH302" (RMP's free-text class form, used as courseFilter).
@@ -494,68 +500,68 @@ const SYSTEM_PROMPT =
   `You are a course-advising assistant for UT Austin's Fall 2026 registration. ` +
   `Answer using only the "Sections" data provided in the conversation. Each entry is one course; it may be ` +
   `offered as several sections (course_sections, each with its own instructors, meeting times, and register ` +
-  `link). Do NOT enumerate every section as a bullet list — the course card shown beneath your answer already ` +
+  `link). Do NOT enumerate every section as a bullet list - the course card shown beneath your answer already ` +
   `lists each section grouped by professor. When the user asks about times or which section to take, summarize ` +
   `instead: how many sections there are, which professors teach them (and roughly how many each), the common ` +
-  `meeting patterns, and any notable option — only list sections individually when there are just a few (about ` +
+  `meeting patterns, and any notable option - only list sections individually when there are just a few (about ` +
   `three or fewer) or the user explicitly asks to see them all. Each entry also includes the course, ` +
   `instructors, meeting schedule, instruction mode, the historical course-wide grade distribution (grade_data), ` +
   `per-professor grade distributions (instructor_grades), the grade distribution broken down by semester ` +
-  `(semester_grades, an array of { semester, grades } from Fall 2020 onward — use it to describe trends over ` +
+  `(semester_grades, an array of { semester, grades } from Fall 2020 onward - use it to describe trends over ` +
   `time, e.g. whether a course has gotten harder), past course evaluations (evaluations, with ` +
   `courseRating and instructorRating out of 5), and RateMyProfessors ratings (professor_ratings, with ` +
-  `rmpRating and rmpDifficulty out of 5, rmpWouldTakeAgain as a percentage, and rmpNumRatings — these are ` +
+  `rmpRating and rmpDifficulty out of 5, rmpWouldTakeAgain as a percentage, and rmpNumRatings - these are ` +
   `student-submitted ratings from RateMyProfessors, separate from the official CES evaluations; call them ` +
   `"RateMyProfessors" so the two aren't confused, and if a professor has no professor_ratings entry or ` +
-  `rmpNumRatings is 0, don't cite an RMP score). A professor_ratings entry may also include rmpTags — the ` +
+  `rmpNumRatings is 0, don't cite an RMP score). A professor_ratings entry may also include rmpTags - the ` +
   `labels students most often apply to that professor on RateMyProfessors (e.g. "Tough grader", "Test heavy", ` +
-  `"Caring") — weave a few in when describing what a professor is like, but never present them as official ` +
-  `evaluations. An entry may also include rmpCourse — ` +
+  `"Caring") - weave a few in when describing what a professor is like, but never present them as official ` +
+  `evaluations. An entry may also include rmpCourse - ` +
   `that same professor's RateMyProfessors rating computed only from reviews of THIS course (rmpCourse.code), ` +
   `with rmpCourse.rating and rmpCourse.difficulty out of 5, rmpCourse.wouldTakeAgain percent, and ` +
   `rmpCourse.numRatings reviews. When the question is about that specific course, prefer rmpCourse over the ` +
   `blended overall RMP numbers and note it's course-specific (e.g. "in CH302 specifically"). ` +
-  `For any professor the user names — including one not in the Sections data, or a course a professor is ` +
-  `not teaching this term — call the getProfessorRating tool to fetch their RateMyProfessors numbers (pass ` +
+  `For any professor the user names - including one not in the Sections data, or a course a professor is ` +
+  `not teaching this term - call the getProfessorRating tool to fetch their RateMyProfessors numbers (pass ` +
   `the course code for course-specific or comparison questions) instead of saying the data is unavailable. ` +
   `Grade fields are student counts per letter grade with +/- detail (A+, A, A-, B+, B, B-, … D-, F, and ` +
   `Other for non-letter marks like Pass/Credit/Withdraw). You can compute the average GPA on the 4.0 scale ` +
   `(A/A+ = 4.0, A- = 3.67, B+ = 3.33, B = 3.0, …, F = 0; Other is excluded) and cite it when discussing how hard ` +
   `a course or professor grades. ` +
   `Instructor names in the structured fields are "LAST, FIRST" (e.g. "LEWIS, CHARLTON N") while the summary ` +
-  `prose uses "First Last" (e.g. "Charlton N Lewis") — treat them as the same person when matching a query. ` +
+  `prose uses "First Last" (e.g. "Charlton N Lewis") - treat them as the same person when matching a query. ` +
   `instructor_grades covers every instructor of a section, but evaluations may exist for only some of them; ` +
   `if a professor has no evaluation entry, cite only their grade distribution rather than inventing ratings. ` +
   `Course numbers encode the course: the first digit is the semester credit-hour value (e.g. 3 = a 3-credit ` +
-  `course, 4 = a 4-credit course), and the second and third digits give the level — 01–19 is lower-division ` +
+  `course, 4 = a 4-credit course), and the second and third digits give the level - 01–19 is lower-division ` +
   `(freshman-level), 20–79 is upper-division (sophomore–senior-level), and 80–99 is graduate-level. ` +
   `Use this to answer questions about credit hours or course level (e.g. "C S 314" is a 3-credit upper-division course). ` +
   `Cite concrete grade percentages and ratings when relevant. ` +
-  `When the student asks you to build, plan, or generate a schedule — or which sections of several courses ` +
-  `fit together without time conflicts — call the buildSchedule tool, passing EVERY course the student named the ` +
+  `When the student asks you to build, plan, or generate a schedule - or which sections of several courses ` +
+  `fit together without time conflicts - call the buildSchedule tool, passing EVERY course the student named the ` +
   `way they referred to it: an exact code when they gave one (e.g. "CH 302"), otherwise their topic/name ` +
   `description verbatim (e.g. "cs algorithms", "an american literature class"). NEVER guess or invent a course ` +
-  `number — the tool resolves descriptions against the real catalog and returns a "resolved" list mapping each ` +
+  `number - the tool resolves descriptions against the real catalog and returns a "resolved" list mapping each ` +
   `description to the course it matched; name those resolved courses in your answer so the student can correct a ` +
   `wrong match. Pass a course even if it is ` +
-  `NOT in the "Sections" data above — that data is unrelated retrieval, not the schedule catalog, so never use it ` +
+  `NOT in the "Sections" data above - that data is unrelated retrieval, not the schedule catalog, so never use it ` +
   `to decide whether a course exists or is offered, and never refuse or claim a course is unavailable before ` +
   `calling buildSchedule; only the tool's notFound list tells you what is actually missing. Never assemble a ` +
-  `schedule yourself — only the tool checks for conflicts. Each schedule it returns is shown to the student as a ` +
-  `visual weekly-grid card with a Save button beneath your answer, so do NOT list every meeting time — briefly ` +
+  `schedule yourself - only the tool checks for conflicts. Each schedule it returns is shown to the student as a ` +
+  `visual weekly-grid card with a Save button beneath your answer, so do NOT list every meeting time - briefly ` +
   `recommend the best option and call out its tradeoffs (top professors, higher average GPA, days off, a compact ` +
   `week, an early or late start; each option includes a gpa field). Gap handling and the professor/GPA/time/days ` +
   `emphasis are INDEPENDENT inputs: pass the student's gap wish in the separate 'gaps' param ('spread' for breaks/` +
   `gaps, 'compact' for back-to-back) and any other emphasis in 'prioritize'. NEVER tell the student their ` +
-  `preferences conflict or that you can only honor one, and NEVER ask them to pick — always just call ` +
+  `preferences conflict or that you can only honor one, and NEVER ask them to pick - always just call ` +
   `buildSchedule honoring all of them and note any tradeoffs in your answer. The tool result may include a notes ` +
-  `array — whenever it is non-empty you MUST surface each note to the student (e.g. that it couldn't add breaks ` +
+  `array - whenever it is non-empty you MUST surface each note to the student (e.g. that it couldn't add breaks ` +
   `because the sections meet back-to-back); never present a schedule as satisfying a preference the notes say it ` +
   `could not. If it reports notFound codes, still build the ` +
   `schedule with the courses that WERE found and just ` +
   `note which weren't; if courses are infeasible or appear in alwaysConflict, explain those sections can't be ` +
   `combined under the given preferences and suggest relaxing one. ` +
-  `If buildSchedule returns zero schedules (an empty schedules list / count 0), do NOT invent or hand-build one — ` +
+  `If buildSchedule returns zero schedules (an empty schedules list / count 0), do NOT invent or hand-build one - ` +
   `tell the student plainly that you couldn't find a conflict-free schedule that meets all their preferences, name ` +
   `the most likely blocking constraint (e.g. the days they asked off or the start/end-time window) and suggest ` +
   `relaxing it, then offer to try again without it. Every schedule the tool returns already satisfies the ` +
@@ -568,7 +574,7 @@ const SYSTEM_PROMPT =
   `the courses being re-chosen, not the kept ones). When the student references "option 2" or "the one with Fridays ` +
   `off", keep that option's sectionIds. ` +
   `Do not mention course enrollment status ` +
-  `(open, closed, waitlisted) — it is not provided and changes over time. If the provided sections do not ` +
+  `(open, closed, waitlisted) - it is not provided and changes over time. If the provided sections do not ` +
   `contain the answer, say so instead of guessing.`;
 
 // --- Schedule builder (buildSchedule tool) -----------------------------------------------------
@@ -764,7 +770,7 @@ export default {
         cors,
         500,
         "Config Error",
-        "Worker is missing required secrets — run `wrangler secret put`.",
+        "Worker is missing required secrets - run `wrangler secret put`.",
       );
     }
 
@@ -793,7 +799,7 @@ export default {
         data: { user },
       } = await supabase.auth.getUser(jwtToken);
 
-      // Rate limit guests only (logged-in users are unlimited) via Cloudflare's native limiter.
+      // Rate limit guests only via Cloudflare's native limiter.
       if (!user && env.GUEST_RATE_LIMITER) {
         const { success } = await env.GUEST_RATE_LIMITER.limit({ key: ip });
         if (!success) {
@@ -801,8 +807,43 @@ export default {
             cors,
             429,
             "Rate Limit Error",
-            "Too many requests — please slow down or sign in.",
+            "Too many requests - please slow down or sign in.",
           );
+        }
+      }
+
+      // Logged-in users get a monthly AI budget metered by token cost: a small free allowance,
+      // or a large Pro allowance while their semester pass is active. Fails open if the usage RPC
+      // isn't available yet, so a missing migration can't lock everyone out.
+      if (user) {
+        const { data } = await supabase.rpc("usage_status");
+        const status = (Array.isArray(data) ? data[0] : data) as
+          | { spent_usd?: number; is_pro?: boolean }
+          | undefined;
+        if (status) {
+          const isPro = status.is_pro === true;
+          const budget = isPro
+            ? env.PRO_BUDGET_USD
+              ? Number(env.PRO_BUDGET_USD)
+              : 5
+            : env.FREE_BUDGET_USD
+              ? Number(env.FREE_BUDGET_USD)
+              : 0.1;
+          if (Number(status.spent_usd ?? 0) >= budget) {
+            return isPro
+              ? errorJson(
+                  cors,
+                  429,
+                  "Rate Limit Error",
+                  "You've hit your usage cap for now - please slow down.",
+                )
+              : errorJson(
+                  cors,
+                  402,
+                  "Upgrade Required",
+                  "You've used your free AI usage for this month. Upgrade to Pro to keep going through the semester.",
+                );
+          }
         }
       }
 
@@ -856,7 +897,7 @@ export default {
       const matchThreshold = env.MATCH_THRESHOLD
         ? Number(env.MATCH_THRESHOLD)
         : 0.5;
-      // Over-fetch, then keep one section per course — a course with several sections (same summary)
+      // Over-fetch, then keep one section per course - a course with several sections (same summary)
       // would otherwise fill the results with duplicates and crowd out other courses.
       const { data: sections, error: matchError } = await supabase
         .rpc("match_sections_detailed", {
@@ -875,8 +916,8 @@ export default {
         );
       }
 
-      // Group by course code ("C S 378") so different sections — and different topics of one number
-      // (the many "C S 378" topics) — collapse to one course. The representative keeps a
+      // Group by course code ("C S 378") so different sections - and different topics of one number
+      // (the many "C S 378" topics) - collapse to one course. The representative keeps a
       // `course_sections` list (every section's times/instructor/register link) and merged
       // per-professor grades + evaluations across the sections. `status` (waitlisted/open/closed) is
       // point-in-time and can't be kept live, so it's dropped before reaching the model or UI.
@@ -987,9 +1028,9 @@ export default {
         apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
       });
 
-      // Courses buildSchedule scheduled — used as the chips in onFinish, overriding the RAG ones.
+      // Courses buildSchedule scheduled - used as the chips in onFinish, overriding the RAG ones.
       let scheduledCourses: RetrievedSection[] = [];
-      // Each generated option as savable sections + its stats — rendered as weekly-grid cards in chat.
+      // Each generated option as savable sections + its stats - rendered as weekly-grid cards in chat.
       let scheduleOptions: {
         sections: ScheduleSection[];
         quality: number;
@@ -1015,7 +1056,7 @@ export default {
             tools: {
               getProfessorRating: tool({
                 description:
-                  "Look up a professor's RateMyProfessors ratings — overall, or for a specific course using ALL of that professor's reviews for it (including courses they are NOT teaching this semester). Use whenever the user names a specific professor and asks about their RMP rating/difficulty, or wants to compare a professor across courses. Pass the course code (e.g. M408C, CH302) when the question is course-specific. Do not say RMP data is unavailable without calling this first.",
+                  "Look up a professor's RateMyProfessors ratings - overall, or for a specific course using ALL of that professor's reviews for it (including courses they are NOT teaching this semester). Use whenever the user names a specific professor and asks about their RMP rating/difficulty, or wants to compare a professor across courses. Pass the course code (e.g. M408C, CH302) when the question is course-specific. Do not say RMP data is unavailable without calling this first.",
                 parameters: jsonSchema<{
                   professor: string;
                   course?: string;
@@ -1082,7 +1123,7 @@ export default {
                             .replace(/[^A-Za-z0-9]/g, "")
                             .toUpperCase(),
                           available: false,
-                          note: `Fewer than ${MIN_COURSE_RATINGS} RateMyProfessors reviews for this professor in this course — use the overall rating instead.`,
+                          note: `Fewer than ${MIN_COURSE_RATINGS} RateMyProfessors reviews for this professor in this course - use the overall rating instead.`,
                         };
                   }
                   return out;
@@ -1090,7 +1131,7 @@ export default {
               }),
               buildSchedule: tool({
                 description:
-                  "Generate ranked, conflict-free class schedules from the courses a student names. Call this whenever the student asks you to build, plan, generate, or put together a schedule, or asks which sections of several courses fit together without time conflicts. Pass each course as the student referred to it — an exact code if they gave one, otherwise their topic/name description; the tool resolves descriptions against the real catalog, so never guess or invent a course number. Never hand-build a schedule yourself — only this tool checks for conflicts.",
+                  "Generate ranked, conflict-free class schedules from the courses a student names. Call this whenever the student asks you to build, plan, generate, or put together a schedule, or asks which sections of several courses fit together without time conflicts. Pass each course as the student referred to it - an exact code if they gave one, otherwise their topic/name description; the tool resolves descriptions against the real catalog, so never guess or invent a course number. Never hand-build a schedule yourself - only this tool checks for conflicts.",
                 parameters: jsonSchema<{
                   courses: string[];
                   keep?: number[];
@@ -1106,7 +1147,7 @@ export default {
                       type: "array",
                       items: { type: "string" },
                       description:
-                        "The courses to schedule, each exactly as the student referred to it. If they gave a plain course code/number, pass just the subject+number (e.g. 'C S 314', 'CH 302'). If they named a SPECIFIC TOPIC under a shared number (e.g. 'UGS 303 SLEEP: ARE WE GETTING ENOUGH' or 'UGS 303 sleep'), pass it verbatim WITH the topic — do NOT shorten it to just 'UGS 303', because one number can have several distinct topics that are entirely different courses. If they described a course by TOPIC or NAME (e.g. 'cs algorithms', 'an american literature class'), pass that description verbatim. Do NOT invent, guess, or convert a description into a course number yourself — the tool looks each one up in the real catalog and returns what it resolved.",
+                        "The courses to schedule, each exactly as the student referred to it. If they gave a plain course code/number, pass just the subject+number (e.g. 'C S 314', 'CH 302'). If they named a SPECIFIC TOPIC under a shared number (e.g. 'UGS 303 SLEEP: ARE WE GETTING ENOUGH' or 'UGS 303 sleep'), pass it verbatim WITH the topic - do NOT shorten it to just 'UGS 303', because one number can have several distinct topics that are entirely different courses. If they described a course by TOPIC or NAME (e.g. 'cs algorithms', 'an american literature class'), pass that description verbatim. Do NOT invent, guess, or convert a description into a course number yourself - the tool looks each one up in the real catalog and returns what it resolved.",
                     },
                     keep: {
                       type: "array",
@@ -1140,7 +1181,7 @@ export default {
                       type: "string",
                       enum: ["best", "easiest", "earliest", "daysoff"],
                       description:
-                        "What to optimize (separate from gaps): 'best' (top professors — the default), 'easiest' (highest historical A-rates), 'earliest' (favor later start times), 'daysoff' (most class-free weekdays).",
+                        "What to optimize (separate from gaps): 'best' (top professors - the default), 'easiest' (highest historical A-rates), 'earliest' (favor later start times), 'daysoff' (most class-free weekdays).",
                     },
                   },
                   required: ["courses"],
@@ -1184,14 +1225,14 @@ export default {
                   let rows = (codeRows ?? []) as DetailRow[];
 
                   // Topic disambiguation: when an input names a TOPIC under a shared number ("UGS 303
-                  // sleep"), keep only that code's rows whose header matches the topic — otherwise the
+                  // sleep"), keep only that code's rows whose header matches the topic - otherwise the
                   // distinct topics (Sleep, Digital Art, …) all merge into one "UGS 303" slot. Applied
                   // only to codes that actually have several distinct topics, so a normal single-topic
                   // course (where the inserted title is just its name) stays on the exact code lookup.
                   const topicTokens = new Map<string, string[]>();
                   for (const input of rawInputs) {
                     const code = courseCode(input);
-                    if (code === input) continue; // bare code or pure description — no topic qualifier
+                    if (code === input) continue; // bare code or pure description - no topic qualifier
                     const tokens = input
                       .slice(code.length)
                       .trim()
@@ -1222,7 +1263,7 @@ export default {
                     rows.map((r) => norm(courseCode(r.course_header))),
                   );
 
-                  // Inputs that didn't match a code are descriptions (or a wrong guess) — resolve each to a real course by embedding, not an invented number.
+                  // Inputs that didn't match a code are descriptions (or a wrong guess) - resolve each to a real course by embedding, not an invented number.
                   const resolved: { input: string; code: string; title: string; sectionId: number }[] = [];
                   const unresolved = rawInputs.filter(
                     (c) => !matched.has(norm(courseCode(c))),
@@ -1232,7 +1273,7 @@ export default {
                       `matchedByCode=${JSON.stringify([...matched])} toResolve=${JSON.stringify(unresolved)}`,
                   );
                   if (unresolved.length) {
-                    // ONE batch embed for all descriptions — parallel calls hit Gemini's rate limit and drop some.
+                    // ONE batch embed for all descriptions - parallel calls hit Gemini's rate limit and drop some.
                     let embs: number[][] = [];
                     try {
                       embs = await embedQueries(
@@ -1302,7 +1343,7 @@ export default {
                       }),
                     );
                   }
-                  // Fetch each resolved TOPIC by course_id (via its matched section), not by code — shared numbers like UGS 303 / C S 378 would otherwise pull in every topic.
+                  // Fetch each resolved TOPIC by course_id (via its matched section), not by code - shared numbers like UGS 303 / C S 378 would otherwise pull in every topic.
                   if (resolved.length) {
                     const { data: secRows } = await supabase
                       .from("sections")
@@ -1445,7 +1486,7 @@ export default {
                     : 0;
                   if (gaps === "spread" && summaries.length && maxGapHours < 0.5) {
                     notes.push(
-                      "The student asked for breaks between classes, but these courses' sections meet back-to-back — none of these options have a meaningful gap. Tell them plainly you couldn't add breaks for this set of courses.",
+                      "The student asked for breaks between classes, but these courses' sections meet back-to-back - none of these options have a meaningful gap. Tell them plainly you couldn't add breaks for this set of courses.",
                     );
                   }
 
@@ -1475,7 +1516,28 @@ export default {
               prefix: "msgs",
               size: 16,
             }),
-            async onFinish({ response }) {
+            async onFinish({ response, usage }) {
+              // Meter this turn's token cost against the user's monthly budget (logged-in only).
+              if (user && usage) {
+                const inRate = env.GEMINI_INPUT_USD_PER_1M
+                  ? Number(env.GEMINI_INPUT_USD_PER_1M)
+                  : 0.3;
+                const outRate = env.GEMINI_OUTPUT_USD_PER_1M
+                  ? Number(env.GEMINI_OUTPUT_USD_PER_1M)
+                  : 2.5;
+                const cost =
+                  (usage.promptTokens * inRate +
+                    usage.completionTokens * outRate) /
+                  1_000_000;
+                if (cost > 0) {
+                  const { error: usageErr } = await supabase.rpc(
+                    "record_usage",
+                    { p_cost: cost },
+                  );
+                  if (usageErr) console.error("record_usage error:", usageErr);
+                }
+              }
+
               // Show chips only for courses the answer actually mentions (match the course code in
               // the text). If it names none (e.g. a general/professor answer), keep all retrieved.
               const answerText = response.messages

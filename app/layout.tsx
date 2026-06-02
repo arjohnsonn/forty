@@ -7,6 +7,7 @@ import Navbar from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
 import { SchedulesProvider } from "@/lib/schedules";
 import ClientErrorGuard from "@/components/client-error-guard";
+import { UpgradeToast } from "@/components/upgrade-toast";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -34,6 +35,16 @@ export default async function RootLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  let userIsPro = false;
+  if (user) {
+    const { data: plan } = await supabase
+      .from("user_plan")
+      .select("pro_until")
+      .maybeSingle();
+    const proUntil = plan?.pro_until as string | null;
+    userIsPro = !!proUntil && proUntil >= new Date().toISOString().slice(0, 10);
+  }
+
   return (
     <html
       lang="en"
@@ -53,6 +64,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <ClientErrorGuard />
+          <UpgradeToast />
           {user ? (
             <Sidebar
               userEmail={user.email ?? ""}
@@ -63,6 +75,7 @@ export default async function RootLayout({
                 ""
               }
               userProvider={user.app_metadata?.provider ?? "google"}
+              userIsPro={userIsPro}
             />
           ) : (
             <Navbar />
@@ -77,7 +90,11 @@ export default async function RootLayout({
               user ? "h-svh" : "h-[calc(100svh-4rem)]"
             }`}
           >
-            {user ? <SchedulesProvider>{children}</SchedulesProvider> : children}
+            {user ? (
+              <SchedulesProvider>{children}</SchedulesProvider>
+            ) : (
+              children
+            )}
           </main>
           <Toaster />
         </ThemeProvider>
