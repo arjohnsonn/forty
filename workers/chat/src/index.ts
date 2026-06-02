@@ -544,10 +544,23 @@ const SYSTEM_PROMPT =
   `schedule yourself — only the tool checks for conflicts. Each schedule it returns is shown to the student as a ` +
   `visual weekly-grid card with a Save button beneath your answer, so do NOT list every meeting time — briefly ` +
   `recommend the best option and call out its tradeoffs (top professors, higher average GPA, days off, a compact ` +
-  `week, an early or late start; each option includes a gpa field). If it reports notFound codes, still build the ` +
+  `week, an early or late start; each option includes a gpa field). Gap handling and the professor/GPA/time/days ` +
+  `emphasis are INDEPENDENT inputs: pass the student's gap wish in the separate 'gaps' param ('spread' for breaks/` +
+  `gaps, 'compact' for back-to-back) and any other emphasis in 'prioritize'. NEVER tell the student their ` +
+  `preferences conflict or that you can only honor one, and NEVER ask them to pick — always just call ` +
+  `buildSchedule honoring all of them and note any tradeoffs in your answer. The tool result may include a notes ` +
+  `array — whenever it is non-empty you MUST surface each note to the student (e.g. that it couldn't add breaks ` +
+  `because the sections meet back-to-back); never present a schedule as satisfying a preference the notes say it ` +
+  `could not. If it reports notFound codes, still build the ` +
   `schedule with the courses that WERE found and just ` +
   `note which weren't; if courses are infeasible or appear in alwaysConflict, explain those sections can't be ` +
   `combined under the given preferences and suggest relaxing one. ` +
+  `If buildSchedule returns zero schedules (an empty schedules list / count 0), do NOT invent or hand-build one — ` +
+  `tell the student plainly that you couldn't find a conflict-free schedule that meets all their preferences, name ` +
+  `the most likely blocking constraint (e.g. the days they asked off or the start/end-time window) and suggest ` +
+  `relaxing it, then offer to try again without it. Every schedule the tool returns already satisfies the ` +
+  `requested time and day preferences, so never present one that violates a stated preference and never silently ` +
+  `drop a preference the student gave. ` +
   `To refine a schedule the student already built, call buildSchedule again and pass keep = the sectionId values ` +
   `(from the previous result) of the sections to leave unchanged; the kept courses are scheduled around while only ` +
   `the others are re-chosen. To swap a course, drop its code from courses and add the new one (keep the rest); to ` +
@@ -1084,12 +1097,8 @@ export default {
                   noClassBefore?: string;
                   noClassAfter?: string;
                   daysOff?: string[];
-                  prioritize?:
-                    | "best"
-                    | "easiest"
-                    | "compact"
-                    | "earliest"
-                    | "daysoff";
+                  gaps?: "compact" | "spread";
+                  prioritize?: "best" | "easiest" | "earliest" | "daysoff";
                 }>({
                   type: "object",
                   properties: {
@@ -1097,7 +1106,7 @@ export default {
                       type: "array",
                       items: { type: "string" },
                       description:
-                        "The courses to schedule, each exactly as the student referred to it. If they gave a course code/number, pass just the subject+number (e.g. 'C S 314', 'CH 302', 'UGS 303' — not the full title). If they described a course by TOPIC or NAME (e.g. 'cs algorithms', 'cs virtualization', 'an american literature class'), pass that description verbatim. Do NOT invent, guess, or convert a description into a course number yourself — the tool looks each one up in the real catalog and returns what it resolved.",
+                        "The courses to schedule, each exactly as the student referred to it. If they gave a plain course code/number, pass just the subject+number (e.g. 'C S 314', 'CH 302'). If they named a SPECIFIC TOPIC under a shared number (e.g. 'UGS 303 SLEEP: ARE WE GETTING ENOUGH' or 'UGS 303 sleep'), pass it verbatim WITH the topic — do NOT shorten it to just 'UGS 303', because one number can have several distinct topics that are entirely different courses. If they described a course by TOPIC or NAME (e.g. 'cs algorithms', 'an american literature class'), pass that description verbatim. Do NOT invent, guess, or convert a description into a course number yourself — the tool looks each one up in the real catalog and returns what it resolved.",
                     },
                     keep: {
                       type: "array",
@@ -1121,17 +1130,17 @@ export default {
                       description:
                         "Weekdays that must have no classes, e.g. ['Friday'].",
                     },
+                    gaps: {
+                      type: "string",
+                      enum: ["compact", "spread"],
+                      description:
+                        "Gap handling between classes, INDEPENDENT of prioritize: 'compact' for back-to-back / minimal gaps, 'spread' to favor breaks / gaps between classes. Omit if the student didn't mention gaps or breaks.",
+                    },
                     prioritize: {
                       type: "string",
-                      enum: [
-                        "best",
-                        "easiest",
-                        "compact",
-                        "earliest",
-                        "daysoff",
-                      ],
+                      enum: ["best", "easiest", "earliest", "daysoff"],
                       description:
-                        "What to optimize: 'best' (top professors — the default), 'easiest' (highest historical A-rates), 'compact' (fewest gaps between classes), 'earliest' (favor later start times), 'daysoff' (most class-free weekdays).",
+                        "What to optimize (separate from gaps): 'best' (top professors — the default), 'easiest' (highest historical A-rates), 'earliest' (favor later start times), 'daysoff' (most class-free weekdays).",
                     },
                   },
                   required: ["courses"],
@@ -1143,6 +1152,7 @@ export default {
                   noClassBefore,
                   noClassAfter,
                   daysOff,
+                  gaps,
                   prioritize,
                 }) => {
                   const rawInputs = (courses ?? [])
@@ -1172,6 +1182,42 @@ export default {
                     };
                   }
                   let rows = (codeRows ?? []) as DetailRow[];
+
+                  // Topic disambiguation: when an input names a TOPIC under a shared number ("UGS 303
+                  // sleep"), keep only that code's rows whose header matches the topic — otherwise the
+                  // distinct topics (Sleep, Digital Art, …) all merge into one "UGS 303" slot. Applied
+                  // only to codes that actually have several distinct topics, so a normal single-topic
+                  // course (where the inserted title is just its name) stays on the exact code lookup.
+                  const topicTokens = new Map<string, string[]>();
+                  for (const input of rawInputs) {
+                    const code = courseCode(input);
+                    if (code === input) continue; // bare code or pure description — no topic qualifier
+                    const tokens = input
+                      .slice(code.length)
+                      .trim()
+                      .toLowerCase()
+                      .split(/\s+/)
+                      .filter(Boolean);
+                    if (tokens.length) topicTokens.set(norm(code), tokens);
+                  }
+                  if (topicTokens.size) {
+                    const headersByCode = new Map<string, Set<string>>();
+                    for (const r of rows) {
+                      const c = norm(courseCode(r.course_header));
+                      const set = headersByCode.get(c) ?? new Set<string>();
+                      set.add(r.course_header);
+                      headersByCode.set(c, set);
+                    }
+                    rows = rows.filter((r) => {
+                      const c = norm(courseCode(r.course_header));
+                      const tokens = topicTokens.get(c);
+                      if (!tokens || (headersByCode.get(c)?.size ?? 0) <= 1)
+                        return true; // no topic for this code, or only one topic → nothing to disambiguate
+                      const header = r.course_header.toLowerCase();
+                      return tokens.every((t) => header.includes(t));
+                    });
+                  }
+
                   const matched = new Set(
                     rows.map((r) => norm(courseCode(r.course_header))),
                   );
@@ -1322,7 +1368,13 @@ export default {
                     };
 
                   const prefs: SchedulerPrefs = {
-                    rank: prioritize ?? "best",
+                    // The gap wish drives the rank when given; otherwise the prioritize emphasis does.
+                    rank:
+                      gaps === "spread"
+                        ? "spread"
+                        : gaps === "compact"
+                          ? "compact"
+                          : (prioritize ?? "best"),
                   };
                   const before = noClassBefore ? parseClock(noClassBefore) : null;
                   const after = noClassAfter ? parseClock(noClassAfter) : null;
@@ -1385,11 +1437,24 @@ export default {
                     earliestStart: m.earliestStart,
                   }));
 
+                  // Deterministic acknowledgement: when breaks were requested but no option has a
+                  // meaningful gap, tell the model so it can't silently present a back-to-back week.
+                  const notes: string[] = [];
+                  const maxGapHours = summaries.length
+                    ? Math.max(...summaries.map((m) => m.gapHours))
+                    : 0;
+                  if (gaps === "spread" && summaries.length && maxGapHours < 0.5) {
+                    notes.push(
+                      "The student asked for breaks between classes, but these courses' sections meet back-to-back — none of these options have a meaningful gap. Tell them plainly you couldn't add breaks for this set of courses.",
+                    );
+                  }
+
                   return {
                     ok: true,
                     requested: rawInputs,
                     resolved,
                     notFound,
+                    notes,
                     infeasible: gen ? gen.infeasible : [],
                     alwaysConflict: gen ? gen.alwaysConflict : [],
                     truncated: gen ? gen.truncated : false,

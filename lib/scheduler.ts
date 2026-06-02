@@ -10,7 +10,13 @@ import {
   type TimeBlock,
 } from "./courses";
 
-export type RankMode = "best" | "easiest" | "compact" | "earliest" | "daysoff";
+export type RankMode =
+  | "best"
+  | "easiest"
+  | "compact"
+  | "spread"
+  | "earliest"
+  | "daysoff";
 
 export type SchedulerPrefs = {
   /** Drop sections meeting before this minute-of-day (e.g. 540 = 9:00 AM). */
@@ -85,7 +91,9 @@ const MAX_RESULTS = 60; // keep the best N after ranking (UI shows ~10)
 const MAX_NODES = 200_000; // search-budget guard so a huge catalog can't hang the tab
 
 // 0–1 grade leniency from average GPA (gpa / 4) — counts +/- grades, unlike the old A-rate. null when unknown.
-const gradeScore = (g: Record<string, number> | null | undefined): number | null => {
+const gradeScore = (
+  g: Record<string, number> | null | undefined,
+): number | null => {
   const gpa = computeGpa(g);
   return gpa == null ? null : gpa / 4;
 };
@@ -153,7 +161,8 @@ export const sectionQuality = (
 
   const ig = find(course.instructor_grades);
   const gs =
-    gradeScore(ig as unknown as Record<string, number>) ?? gradeScore(course.grade_data);
+    gradeScore(ig as unknown as Record<string, number>) ??
+    gradeScore(course.grade_data);
   if (gs != null) signals.push(gs);
 
   const rmp = find(course.professor_ratings);
@@ -193,7 +202,8 @@ export const sectionGpa = (
     names.includes(x.instructor),
   );
   return (
-    computeGpa(ig as unknown as Record<string, number>) ?? computeGpa(course.grade_data)
+    computeGpa(ig as unknown as Record<string, number>) ??
+    computeGpa(course.grade_data)
   );
 };
 
@@ -245,8 +255,11 @@ const score = (
     ? picks.reduce((s, p) => s + p.ease, 0) / picks.length
     : 0.5;
   const gpaVals = picks.map((p) => p.gpa).filter((g): g is number => g != null);
-  const gpa = gpaVals.length ? gpaVals.reduce((s, x) => s + x, 0) / gpaVals.length : null;
+  const gpa = gpaVals.length
+    ? gpaVals.reduce((s, x) => s + x, 0) / gpaVals.length
+    : null;
   const compactness = 1 - Math.min(gapMinutes, 480) / 480; // cap influence at 8h of gaps
+  const spreadScore = Math.min(gapMinutes, 180) / 180; // breaks are good, up to ~3h/week of gaps
   const freeDays = Math.min(daysOff.length / 3, 1); // 3+ class-free weekdays → max
   // Later first class is "better" for the earliest-finish-averse; 8:00→0, 11:00+→1.
   const lateStart =
@@ -257,6 +270,8 @@ const score = (
     overall = 0.6 * ease + 0.25 * quality + 0.15 * compactness;
   else if (prefs.rank === "compact")
     overall = 0.6 * compactness + 0.4 * quality;
+  else if (prefs.rank === "spread")
+    overall = 0.55 * spreadScore + 0.45 * quality;
   else if (prefs.rank === "daysoff")
     overall = 0.6 * freeDays + 0.25 * quality + 0.15 * compactness;
   else if (prefs.rank === "earliest")

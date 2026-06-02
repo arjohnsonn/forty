@@ -21,6 +21,7 @@ import {
   Pencil,
   MoreHorizontal,
   LogOut,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
@@ -44,6 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { useToast } from "@/components/hooks/use-toast";
 import { signOutAction } from "@/app/actions";
 
@@ -103,9 +105,11 @@ const Section = ({
 export function Sidebar({
   userEmail,
   userName,
+  userProvider,
 }: {
   userEmail: string;
   userName: string;
+  userProvider: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -118,6 +122,7 @@ export function Sidebar({
   const [renameTarget, setRenameTarget] = useState<Conversation | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const fetchConversations = useCallback(async () => {
     const { data } = await supabase
@@ -181,12 +186,12 @@ export function Sidebar({
     if (isMobile) setMobileOpen(false);
   }, [pathname, isMobile]);
 
+  // The auth-state base width is set on <body> by the layout (from the server-known user),
+  // so it's correct pre-paint on load and on sign-in/out. Here we only override for the
+  // client-only collapse/mobile states, writing to the same element so it isn't shadowed.
   useEffect(() => {
-    const width = isMobile ? "0" : collapsed ? "0" : "15rem";
-    document.documentElement.style.setProperty("--sidebar-width", width);
-    return () => {
-      document.documentElement.style.setProperty("--sidebar-width", "0");
-    };
+    const width = isMobile ? "0px" : collapsed ? "0px" : "15rem";
+    document.body.style.setProperty("--sidebar-width", width);
   }, [collapsed, isMobile]);
 
   const handleDelete = async (id: string) => {
@@ -422,6 +427,10 @@ export function Sidebar({
                 {userEmail}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => signOutAction()}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
@@ -438,6 +447,14 @@ export function Sidebar({
           onClick={() => setMobileOpen(false)}
         />
       )}
+
+      <AccountSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        userEmail={userEmail}
+        userName={userName}
+        userProvider={userProvider}
+      />
 
       <Dialog
         open={!!renameTarget}

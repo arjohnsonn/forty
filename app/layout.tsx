@@ -40,7 +40,12 @@ export default async function RootLayout({
       className={`${poppinSans.className} bg-background`}
       suppressHydrationWarning
     >
-      <body className="bg-background text-foreground">
+      <body
+        className="bg-background text-foreground"
+        style={
+          { "--sidebar-width": user ? "15rem" : "0px" } as React.CSSProperties
+        }
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -52,10 +57,12 @@ export default async function RootLayout({
             <Sidebar
               userEmail={user.email ?? ""}
               userName={
+                (user.user_metadata?.display_name as string) ??
                 (user.user_metadata?.full_name as string) ??
                 (user.user_metadata?.name as string) ??
                 ""
               }
+              userProvider={user.app_metadata?.provider ?? "google"}
             />
           ) : (
             <Navbar />

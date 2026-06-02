@@ -2,6 +2,7 @@
 
 import { encodedRedirect } from "@/utils/utils";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -130,6 +131,38 @@ export const resetPasswordAction = async (formData: FormData) => {
 
 export const signOutAction = async () => {
   const supabase = await createClient();
+  await supabase.auth.signOut();
+  return redirect("/");
+};
+
+export const deleteAccountAction = async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in" };
+
+  // Bail before deleting anything if the admin client can't be built (missing service key) —
+  // otherwise we'd wipe the user's rows but be unable to delete the account.
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
+    return { error: "Couldn't delete account. Try again." };
+
+  // FKs to auth.users lack ON DELETE CASCADE, so the user's rows must be removed
+  // first or auth.admin.deleteUser fails. RLS scopes these deletes to the user's own rows.
+  const { error: sErr } = await supabase
+    .from("schedules")
+    .delete()
+    .eq("user_id", user.id);
+  const { error: cErr } = await supabase
+    .from("conversations")
+    .delete()
+    .eq("user_id", user.id);
+  if (sErr || cErr) return { error: "Couldn't clear your data. Try again." };
+
+  const admin = createAdminClient();
+  const { error: dErr } = await admin.auth.admin.deleteUser(user.id);
+  if (dErr) return { error: "Couldn't delete account. Try again." };
+
   await supabase.auth.signOut();
   return redirect("/");
 };
