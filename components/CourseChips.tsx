@@ -131,7 +131,7 @@ export function GradeBar({
             {gpa.toFixed(2)}
           </span>
           <span className="text-xs text-muted-foreground">
-            avg GPA · {total.toLocaleString()} grades
+            avg GPA - {total.toLocaleString()} grades
           </span>
         </div>
       )}
@@ -150,7 +150,7 @@ export function GradeBar({
               </TooltipTrigger>
               <TooltipContent>
                 {p.count.toLocaleString()}{" "}
-                {p.count === 1 ? "student" : "students"} · {p.b}
+                {p.count === 1 ? "student" : "students"} - {p.b}
               </TooltipContent>
             </Tooltip>
           ))}

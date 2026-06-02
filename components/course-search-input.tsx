@@ -145,7 +145,15 @@ export function CourseSearchInput({
     }
     setOpen(false);
     setResults([]);
-    requestAnimationFrame(() => inputRef.current?.focus());
+    // Focus and drop the cursor at the end so the user can keep typing the next class.
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+      el.scrollLeft = el.scrollWidth; // scroll the overflow so the caret is visible
+    });
   };
 
   return (

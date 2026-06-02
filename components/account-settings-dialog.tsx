@@ -6,7 +6,8 @@ import { Laptop, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { createClient } from "@/utils/supabase/client";
 import { deleteAccountAction } from "@/app/actions";
-import { UpgradeDialog } from "@/components/upgrade-dialog";
+import { TopUpDialog } from "@/components/topup-dialog";
+import { estMessages } from "@/lib/credits";
 import { useToast } from "@/components/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,9 +27,6 @@ const THEMES = [
   { value: "dark", label: "Dark", icon: Moon },
   { value: "system", label: "System", icon: Laptop },
 ] as const;
-
-// Mirrors the chat Worker's FREE_BUDGET_USD - used only to render the usage bar.
-const FREE_BUDGET_USD = 0.1;
 
 export function AccountSettingsDialog({
   open,
@@ -53,9 +51,8 @@ export function AccountSettingsDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [proUntil, setProUntil] = useState<string | null>(null);
-  const [spent, setSpent] = useState(0);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [balance, setBalance] = useState(0);
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -65,18 +62,8 @@ export function AccountSettingsDialog({
     setConfirmOpen(false);
     setConfirmText("");
     supabase
-      .from("user_plan")
-      .select("pro_until")
-      .maybeSingle()
-      .then(({ data }) =>
-        setProUntil((data?.pro_until as string | null) ?? null),
-      );
-    supabase
-      .from("user_usage")
-      .select("spent_usd")
-      .eq("period", new Date().toISOString().slice(0, 7)) // 'YYYY-MM' (UTC)
-      .maybeSingle()
-      .then(({ data }) => setSpent(Number(data?.spent_usd ?? 0)));
+      .rpc("credit_balance")
+      .then(({ data }) => setBalance(Number(data ?? 0)));
   }, [open, userName, supabase]);
 
   const displayName = userName?.trim() || userEmail;
@@ -87,9 +74,6 @@ export function AccountSettingsDialog({
 
   const trimmedName = name.trim();
   const canSave = !!trimmedName && trimmedName !== userName.trim() && !saving;
-
-  const isPro = !!proUntil && proUntil >= new Date().toISOString().slice(0, 10);
-  const usedPct = Math.min(spent / FREE_BUDGET_USD, 1) * 100;
 
   const handleSaveName = async () => {
     setSaving(true);
@@ -140,53 +124,20 @@ export function AccountSettingsDialog({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Plan</Label>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs font-medium",
-                  isPro
-                    ? "bg-texas/15 text-texas"
-                    : "bg-foreground/10 text-muted-foreground",
-                )}
-              >
-                {isPro ? "Pro" : "Free"}
+              <Label>AI Credits</Label>
+              <span className="text-lg font-semibold text-texas">
+                ${balance.toFixed(2)}
               </span>
             </div>
-
-            {isPro ? (
-              <p className="text-sm text-muted-foreground">
-                Active until{" "}
-                <span className="font-medium text-foreground">
-                  {new Date(proUntil + "T00:00:00").toLocaleDateString(
-                    undefined,
-                    { month: "long", day: "numeric", year: "numeric" },
-                  )}
-                </span>
-                . Thanks for supporting Forty!
-              </p>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-foreground/10">
-                    <div
-                      className="h-full rounded-full bg-texas transition-all"
-                      style={{ width: `${usedPct}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {Math.round(usedPct)}% of your free monthly AI used. Resets
-                    monthly!
-                  </p>
-                </div>
-
-                <Button
-                  onClick={() => setUpgradeOpen(true)}
-                  className="w-full bg-texas text-white hover:bg-texas/90"
-                >
-                  Upgrade to Pro
-                </Button>
-              </>
-            )}
+            <p className="text-xs text-muted-foreground">
+              ≈ {estMessages(balance)} messages left. Credits never expire
+            </p>
+            <Button
+              onClick={() => setTopUpOpen(true)}
+              className="w-full bg-texas text-white hover:bg-texas/90"
+            >
+              Add Credits
+            </Button>
           </div>
 
           <div className="space-y-2">
@@ -295,7 +246,7 @@ export function AccountSettingsDialog({
         </DialogContent>
       </Dialog>
 
-      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+      <TopUpDialog open={topUpOpen} onOpenChange={setTopUpOpen} />
     </>
   );
 }

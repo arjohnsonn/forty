@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TextareaExpand } from "@/components/ui/textarea";
 import { CourseSearchInput } from "@/components/course-search-input";
+import { useAgentic } from "@/components/hooks/use-agentic";
+import { AgenticToggle } from "@/components/agentic-toggle";
 import { PrefSelect } from "@/components/pref-select";
 import { DayPills, dayCodesToNames } from "@/components/day-pills";
 import {
@@ -54,17 +56,19 @@ type Starter = {
   fields: StarterField[];
   required: string[]; // field keys that must be filled to enable Insert
   compose: (v: Record<string, string>) => string;
+  agentic?: boolean; // inserting this scaffold turns on agentic scheduling
 };
 
 const clean = (s: string | undefined) => (s ?? "").trim().replace(/,\s*$/, "");
 
 const starterButtonsConfig: Starter[] = [
   {
-    label: "Build my schedule",
+    label: "Build my Schedule",
     title: "Build My Schedule",
     icon: Wand2,
     iconProps: { className: "w-5 h-5 text-texas" },
     required: ["classes"],
+    agentic: true,
     fields: [
       {
         key: "classes",
@@ -199,6 +203,7 @@ type Props = {
 };
 
 const NewConvo = ({ onSubmit }: Props) => {
+  const { agentic, setAgentic } = useAgentic();
   // Deterministic seed so text shows on first paint; randomized after mount.
   const [greeting, setGreeting] = useState(randomGreetings[0]);
   const [parts, setParts] = useState<string[]>(randomGreetings[0].split("*"));
@@ -222,6 +227,7 @@ const NewConvo = ({ onSubmit }: Props) => {
   // Drop the composed prompt into the input (don't send) so the user can review/edit it.
   const insertStarter = () => {
     if (!activeStarter || !allFilled) return;
+    if (activeStarter.agentic) setAgentic(true);
     pendingInsert.current = activeStarter.compose(fieldValues);
     setActiveStarter(null);
   };
@@ -259,6 +265,10 @@ const NewConvo = ({ onSubmit }: Props) => {
             placeholder="Ask anything"
             name="query"
             required
+          />
+          <AgenticToggle
+            agentic={agentic}
+            onToggle={() => setAgentic(!agentic)}
           />
           <Button
             className="h-9 w-9 shrink-0 rounded-full border-transparent bg-texas p-0 transition-colors hover:bg-texas/90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -416,6 +426,12 @@ const NewConvo = ({ onSubmit }: Props) => {
                       );
                     })}
                   </div>
+                  {activeStarter?.agentic && (
+                    <p className="mb-3 rounded-md bg-foreground/5 px-3 py-2 text-xs text-muted-foreground">
+                      Building a schedule turns on agentic scheduling, which
+                      uses slightly more AI credits.
+                    </p>
+                  )}
                   <div className="flex justify-end gap-2">
                     <Button
                       variant="outline"

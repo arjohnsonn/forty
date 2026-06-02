@@ -9,7 +9,7 @@ boosters, and build your week — all backed by the actual UT course catalog.
 > portfolio purposes only. It is **all rights reserved** — you may read the code, but you
 > may **not** use, copy, modify, host, deploy, or run it (or any part of it) without
 > written permission. See [`LICENSE`](./LICENSE). "Forty" is a trademark of the author.
-> The setup notes below document *how it's built*; they are not an invitation to redeploy it.
+> The setup notes below document _how it's built_; they are not an invitation to redeploy it.
 
 ---
 
@@ -20,22 +20,22 @@ boosters, and build your week — all backed by the actual UT course catalog.
   in chat.
 - **Deterministic schedule builder** (`/build`) — pick courses and generate ranked, conflict-free
   schedules with pure logic (no AI, no usage cost).
-- **Professor insight** — compare professors by RateMyProfessors rating *and* historical grade
+- **Professor insight** — compare professors by RateMyProfessors rating _and_ historical grade
   distributions / average GPA.
 - **GPA boosters & course/professor browse** — structured search over the catalog.
 - **Calendar & saved schedules**, account settings, dark mode.
-- **Freemium billing** — AI usage is metered by real token cost; a $3.99/semester **Pro** pass
-  (one-time, via Stripe) lifts the free limit.
+- **Pay-what-you-want credits** — a free trial credit to start, then top up any amount (min $1) via
+  Stripe; AI usage debits a prepaid balance at a small markup over real token cost.
 
 ## Stack
 
-| Layer | Tech |
-|---|---|
-| Frontend | Next.js 15 (App Router), React 19, Tailwind, shadcn/ui — on Vercel |
-| Chat / AI | Cloudflare Worker + Vercel AI SDK, Google **Gemini 2.5 Flash** (chat + tool use) |
+| Layer     | Tech                                                                                     |
+| --------- | ---------------------------------------------------------------------------------------- |
+| Frontend  | Next.js 15 (App Router), React 19, Tailwind, shadcn/ui — on Vercel                       |
+| Chat / AI | Cloudflare Worker + Vercel AI SDK, Google **Gemini 2.5 Flash** (chat + tool use)         |
 | Retrieval | Gemini embeddings + Postgres vector search (RAG over courses/sections/professors/grades) |
-| Data | Supabase — Postgres, Auth (Google OAuth), Row Level Security, Realtime |
-| Billing | Stripe (hosted Checkout + webhook) |
+| Data      | Supabase — Postgres, Auth (Google OAuth), Row Level Security, Realtime                   |
+| Billing   | Stripe (hosted Checkout + webhook)                                                       |
 
 ## Architecture
 
@@ -45,8 +45,8 @@ boosters, and build your week — all backed by the actual UT course catalog.
   the answer back with savable schedule/course cards.
 - A **pure scheduler** (`lib/scheduler.ts`) does conflict-free generation and ranking; it's shared
   by both the `/build` composer (browser) and the Worker.
-- **Usage is metered by token cost** in the Worker's `onFinish`; free vs Pro budgets are enforced
-  per user, and the Stripe webhook grants Pro by writing a `pro_until` date.
+- **Usage debits a prepaid credit balance** in the Worker's `onFinish` (token cost × markup); the
+  Worker blocks at $0, and the Stripe webhook tops the balance up (idempotent per payment).
 
 ## Project layout
 
@@ -57,7 +57,7 @@ components/      UI (chat, schedule cards, dialogs, account settings)
 lib/            Shared logic — scheduler, course parsing, browse RPCs
 workers/chat/   The Cloudflare chat Worker (RAG + Gemini + tools + metering)
 supabase/       SQL migrations: schema, RLS policies, RPCs
-scripts/        UT catalog scraping, ingestion, and embedding
+scripts/        UT catalog scraping, ingestion, and embedding (some scraping scripts are not included)
 ```
 
 ## Local development (reference)

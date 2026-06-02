@@ -57,7 +57,7 @@ export default function AddToSchedule({
     await addSection(id, section);
     toast({
       title: `Added to ${name}`,
-      description: `${section.course_code} · #${section.section_id}`,
+      description: `${section.course_code} - #${section.section_id}`,
       action: (
         <div className="flex gap-2">
           <ToastAction

@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { AccountSettingsDialog } from "@/components/account-settings-dialog";
-import { UpgradeDialog } from "@/components/upgrade-dialog";
+import { TopUpDialog } from "@/components/topup-dialog";
 import { useToast } from "@/components/hooks/use-toast";
 import { signOutAction } from "@/app/actions";
 
@@ -111,12 +111,10 @@ export function Sidebar({
   userEmail,
   userName,
   userProvider,
-  userIsPro,
 }: {
   userEmail: string;
   userName: string;
   userProvider: string;
-  userIsPro: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -130,7 +128,8 @@ export function Sidebar({
   const [draftTitle, setDraftTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
 
   const fetchConversations = useCallback(async () => {
     const { data } = await supabase
@@ -150,20 +149,29 @@ export function Sidebar({
     );
   }, [supabase]);
 
-  // Live updates (insert/update/delete) via Realtime - no polling.
+  const fetchBalance = useCallback(async () => {
+    const { data } = await supabase.rpc("credit_balance");
+    setBalance(Number(data ?? 0));
+  }, [supabase]);
+
+  // Live updates (insert/update/delete) via Realtime - no polling. A finished chat persists the
+  // conversation AND debits credits in the same step, so refresh the balance off the same event.
   useEffect(() => {
     const channel = supabase
       .channel("sidebar-conversations")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversations" },
-        () => fetchConversations(),
+        () => {
+          fetchConversations();
+          fetchBalance();
+        },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, fetchConversations]);
+  }, [supabase, fetchConversations, fetchBalance]);
 
   // Reflect a rename done from the conversation header immediately (without waiting on a refetch).
   useEffect(() => {
@@ -181,7 +189,8 @@ export function Sidebar({
   // Initial load + refresh on navigation (also a safety net if Realtime drops an event).
   useEffect(() => {
     fetchConversations();
-  }, [pathname, fetchConversations]);
+    fetchBalance();
+  }, [pathname, fetchConversations, fetchBalance]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -420,16 +429,22 @@ export function Sidebar({
           </Section>
         </div>
 
-        {!userIsPro && (
+        <div className="mx-2 mb-1 space-y-1 rounded-lg border border-foreground/10 px-3 py-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" /> Credits
+            </span>
+            <span className="font-medium text-foreground">
+              {balance === null ? "—" : `$${balance.toFixed(2)}`}
+            </span>
+          </div>
           <button
-            onClick={() => setUpgradeOpen(true)}
-            className="mx-2 mb-1 flex items-center gap-2 rounded-lg border border-texas/30 bg-texas/10 px-3 py-2 text-left text-sm font-medium text-texas transition-colors hover:bg-texas/20"
+            onClick={() => setTopUpOpen(true)}
+            className="w-full rounded-md border border-texas/40 py-1.5 text-xs font-medium text-texas transition-colors hover:bg-texas/10"
           >
-            <Sparkles className="h-4 w-4 shrink-0" />
-            <span className="flex-1 truncate">Upgrade to Pro</span>
-            <span className="text-xs opacity-80">$3.99</span>
+            Add credits
           </button>
-        )}
+        </div>
 
         <div className="flex items-center gap-1 border-t border-foreground/10 p-2">
           <DropdownMenu>
@@ -494,7 +509,7 @@ export function Sidebar({
         userProvider={userProvider}
       />
 
-      <UpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+      <TopUpDialog open={topUpOpen} onOpenChange={setTopUpOpen} />
 
       <Dialog
         open={!!renameTarget}

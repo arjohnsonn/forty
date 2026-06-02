@@ -23,31 +23,57 @@ export async function POST(req: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object; // narrowed to a Checkout.Session
     const userId = session.metadata?.user_id;
-    const proUntil = process.env.CURRENT_TERM_END; // e.g. "2026-12-15"
-    if (!userId || !proUntil) {
-      console.error("[StripeWebhook] skipping grant - missing", {
+    // Credit the pre-discount amount, so a promo code is bonus credit (not less).
+    const amount = (session.amount_subtotal ?? 0) / 100;
+    const paymentIntent =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : null;
+    if (!userId || amount <= 0) {
+      console.error("[StripeWebhook] skipping credit - missing/zero", {
         hasUserId: !!userId,
-        hasTermEnd: !!proUntil,
+        amount,
       });
     } else {
       const admin = createAdminClient();
-      const { error } = await admin.from("user_plan").upsert(
-        {
-          user_id: userId,
-          pro_until: proUntil,
-          stripe_customer_id:
-            typeof session.customer === "string" ? session.customer : null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
+      // Idempotent per event.id, so a Stripe retry can't double-credit; 5xx makes Stripe retry.
+      const { error } = await admin.rpc("add_credit", {
+        p_event: event.id,
+        p_user: userId,
+        p_amount: amount,
+        p_payment_intent: paymentIntent,
+      });
       if (error) {
-        // Return 5xx so Stripe retries — the upsert is idempotent (onConflict user_id),
-        // so a transient DB failure won't leave the user paid-but-not-Pro.
-        console.error("[StripeWebhook] user_plan upsert error:", error);
-        return new Response("upsert failed", { status: 500 });
+        console.error("[StripeWebhook] add_credit error:", error);
+        return new Response("credit failed", { status: 500 });
       }
-      console.log("[StripeWebhook] granted Pro to", userId, "until", proUntil);
+      console.log("[StripeWebhook] added", amount, "credit to", userId);
+    }
+  }
+
+  // Refund: claw back the refunded amount from the user's credit balance.
+  if (event.type === "refund.created") {
+    const refund = event.data.object; // narrowed to a Refund
+    const paymentIntent =
+      typeof refund.payment_intent === "string" ? refund.payment_intent : null;
+    const amount = (refund.amount ?? 0) / 100;
+    if (!paymentIntent || amount <= 0) {
+      console.error("[StripeWebhook] skipping refund - missing/zero", {
+        hasPaymentIntent: !!paymentIntent,
+        amount,
+      });
+    } else {
+      const admin = createAdminClient();
+      const { error } = await admin.rpc("refund_credit", {
+        p_event: event.id,
+        p_payment_intent: paymentIntent,
+        p_amount: amount,
+      });
+      if (error) {
+        console.error("[StripeWebhook] refund_credit error:", error);
+        return new Response("refund failed", { status: 500 });
+      }
+      console.log("[StripeWebhook] clawed back", amount, "for", paymentIntent);
     }
   }
 

@@ -61,7 +61,7 @@ export function exportTxt(s: ExportSchedule) {
         ? `${minuteLabel(r.startMin)}–${minuteLabel(r.endMin)}`
         : m.hours || "TBA";
       lines.push(
-        `  ${m.days || "TBA"} ${time}${m.location ? ` · ${m.location}` : ""}`,
+        `  ${m.days || "TBA"} ${time}${m.location ? ` - ${m.location}` : ""}`,
       );
     }
     lines.push("");

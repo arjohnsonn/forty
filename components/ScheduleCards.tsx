@@ -212,7 +212,7 @@ function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
                           top: ((b.startMin - top0) / 60) * HOUR_PX + 1,
                           height: h,
                         }}
-                        title={`${b.code}${b.prof ? ` - ${b.prof}` : ""} · ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}${b.location ? ` · ${b.location}` : ""}`}
+                        title={`${b.code}${b.prof ? ` - ${b.prof}` : ""} - ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}${b.location ? ` - ${b.location}` : ""}`}
                       >
                         <div className="truncate font-semibold">
                           {b.code}
@@ -281,7 +281,7 @@ function ScheduleCard({
   );
   const name = useMemo(() => {
     const codes = Array.from(new Set(sections.map((s) => s.course_code)));
-    return codes.join(" · ").slice(0, 60) || `Schedule ${index + 1}`;
+    return codes.join(" - ").slice(0, 60) || `Schedule ${index + 1}`;
   }, [sections, index]);
 
   const off = option.daysOff.length
@@ -304,7 +304,7 @@ function ScheduleCard({
     setState("saved");
     toast({
       title: `Saved “${name}”`,
-      description: `${sections.length} ${sections.length === 1 ? "course" : "courses"} · on your Calendar`,
+      description: `${sections.length} ${sections.length === 1 ? "course" : "courses"} - on your Calendar`,
       action: (
         <ToastAction
           altText="View schedule"
@@ -340,7 +340,7 @@ function ScheduleCard({
             onClick={() => router.push("/calendar")}
             className="gap-1.5"
           >
-            <Check className="h-3.5 w-3.5" /> Saved · View on calendar
+            <Check className="h-3.5 w-3.5" /> Saved - View on calendar
           </Button>
         ) : (
           <Button

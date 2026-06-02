@@ -5,8 +5,8 @@ import { GoogleIcon } from "@/components/google-icon";
 
 export default function SignedOutLanding() {
   return (
-    <div className="flex flex-1 items-center justify-center p-4">
-      <div className="flex flex-col items-center gap-2 text-center">
+    <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
         <h1 className="text-2xl sm:text-3xl">
           Plan your{" "}
           <span className="font-semibold text-texas">perfect UT schedule</span>
@@ -25,18 +25,18 @@ export default function SignedOutLanding() {
             Continue with Google
           </SubmitButton>
         </form>
-        <nav className="mt-8 flex gap-4 text-xs text-muted-foreground">
-          <Link href="/terms" className="hover:text-foreground">
-            Terms
-          </Link>
-          <Link href="/privacy" className="hover:text-foreground">
-            Privacy
-          </Link>
-          <Link href="/refund" className="hover:text-foreground">
-            Refunds
-          </Link>
-        </nav>
       </div>
+      <nav className="flex justify-center gap-4 text-xs text-muted-foreground">
+        <Link href="/terms" className="hover:text-foreground">
+          Terms
+        </Link>
+        <Link href="/privacy" className="hover:text-foreground">
+          Privacy
+        </Link>
+        <Link href="/refund" className="hover:text-foreground">
+          Refunds
+        </Link>
+      </nav>
     </div>
   );
 }

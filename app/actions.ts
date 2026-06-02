@@ -168,34 +168,37 @@ export const deleteAccountAction = async () => {
   return redirect("/");
 };
 
-// One-time $3.99 Pro semester pass. Inline price (no dashboard product needed); the webhook
-// reads metadata.user_id to grant Pro. Returns the hosted Checkout URL for the client to open.
-export const createCheckoutSession = async () => {
+// Pay-what-you-want credit top-up (min $1); the webhook credits the pre-discount amount.
+export const createCheckoutSession = async (amountCents: number) => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in" };
 
+  const amount = Math.round(amountCents);
+  if (!Number.isFinite(amount) || amount < 100 || amount > 50000) {
+    return { error: "Top-up must be between $1 and $500." };
+  }
+
   const origin = (await headers()).get("origin") ?? "";
   try {
     const session = await getStripe().checkout.sessions.create({
       mode: "payment",
       allow_promotion_codes: true,
-      customer_creation: "always",
       customer_email: user.email ?? undefined,
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: 399,
-            product_data: { name: "Forty Pro - Semester Pass" },
+            unit_amount: amount,
+            product_data: { name: "Forty AI credits" },
           },
         },
       ],
       metadata: { user_id: user.id },
-      success_url: `${origin}/?upgraded=1`,
+      success_url: `${origin}/?credits=1`,
       cancel_url: `${origin}/`,
     });
     return { url: session.url };

@@ -12,15 +12,19 @@
       "namespace_id": "1001",
       "simple": { "limit": 10, "period": 60 },
     },
+    {
+      // Per logged-in user: generous burst cap that blocks spam without affecting normal use.
+      "name": "USER_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 20, "period": 60 },
+    },
   ],
   "vars": {
-    "ALLOWED_ORIGINS": "https://utrgpt.vercel.app,http://localhost:3000",
+    "ALLOWED_ORIGINS": "https://fortyai.vercel.app,https://utrgpt.vercel.app,http://localhost:3000",
     "MATCH_THRESHOLD": "0.5",
-    // Monthly AI budgets (USD): small free allowance vs large Pro allowance, + gemini-2.5-flash
-    // token rates ($/1M tokens) used to meter spend.
-    "FREE_BUDGET_USD": "0.1",
-    "PRO_BUDGET_USD": "5",
+    // gemini-2.5-flash token rates ($/1M) + retail markup for debiting credits. Keep CREDIT_MARKUP synced with lib/credits.ts.
     "GEMINI_INPUT_USD_PER_1M": "0.3",
     "GEMINI_OUTPUT_USD_PER_1M": "2.5",
+    "CREDIT_MARKUP": "4",
   },
 }

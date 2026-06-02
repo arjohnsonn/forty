@@ -408,7 +408,7 @@ function MiniGrid({
               .map((c, i) => (
                 <div
                   key={`f${i}`}
-                  title={`${c.code} · ${minuteLabel(c.startMin)}–${minuteLabel(c.endMin)}`}
+                  title={`${c.code} - ${minuteLabel(c.startMin)}–${minuteLabel(c.endMin)}`}
                   className="absolute inset-x-0.5 flex items-center justify-center overflow-hidden rounded-sm border border-dashed border-muted-foreground/40 bg-muted px-0.5 text-[8px] font-medium leading-none text-muted-foreground"
                   style={{ top: `${c.top}%`, height: `${c.height}%` }}
                 >
@@ -422,7 +422,7 @@ function MiniGrid({
                 return (
                   <div
                     key={i}
-                    title={`${c.code} · ${minuteLabel(c.startMin)}–${minuteLabel(c.endMin)}`}
+                    title={`${c.code} - ${minuteLabel(c.startMin)}–${minuteLabel(c.endMin)}`}
                     className={cn(
                       "absolute inset-x-0.5 flex items-center justify-center overflow-hidden rounded-sm px-0.5 text-[8px] font-semibold leading-none",
                       col.bg,
@@ -1251,7 +1251,7 @@ export default function BuildView() {
                   >
                     {d.loading && <Loader2 className="h-3 w-3 animate-spin" />}
                     <span className="font-medium">{code}</span>
-                    {d.error && <span>· failed</span>}
+                    {d.error && <span>- failed</span>}
                     <button
                       type="button"
                       onClick={() => removeCourse(d.course.courseId)}

@@ -34,6 +34,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/hooks/use-toast";
+import { useAgentic, getAgentic } from "@/components/hooks/use-agentic";
+import { AgenticToggle } from "@/components/agentic-toggle";
 import { useChat } from "@ai-sdk/react";
 import type { Message } from "ai";
 import ReactMarkdown from "react-markdown";
@@ -102,6 +104,7 @@ const Conversation: React.FC<ConversationProps> = ({
     },
   });
 
+  const { agentic, setAgentic } = useAgentic();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pendingSent = useRef(false);
@@ -166,7 +169,10 @@ const Conversation: React.FC<ConversationProps> = ({
     pendingSent.current = true;
     (async () => {
       const headers = await authHeaders();
-      append({ role: "user", content: pendingQuery }, { headers });
+      append(
+        { role: "user", content: pendingQuery },
+        { headers, body: { agentic: getAgentic() } },
+      );
     })();
   }, [pendingQuery, append, authHeaders]);
 
@@ -197,12 +203,15 @@ const Conversation: React.FC<ConversationProps> = ({
   const onSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim() || busy) return;
-    handleSubmit(undefined, { headers: await authHeaders() });
+    handleSubmit(undefined, {
+      headers: await authHeaders(),
+      body: { agentic: getAgentic() },
+    });
   };
 
   const onRegenerate = async () => {
     if (busy) return;
-    reload({ headers: await authHeaders() });
+    reload({ headers: await authHeaders(), body: { agentic: getAgentic() } });
   };
 
   const onCopy = async (text: string) => {
@@ -308,6 +317,10 @@ const Conversation: React.FC<ConversationProps> = ({
                   }
                 }}
                 placeholder="Message Forty…"
+              />
+              <AgenticToggle
+                agentic={agentic}
+                onToggle={() => setAgentic(!agentic)}
               />
               <Button
                 className="h-9 w-9 shrink-0 rounded-full border-transparent bg-texas p-0 hover:bg-texas/90 disabled:opacity-50"
