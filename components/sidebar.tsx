@@ -452,7 +452,7 @@ export function Sidebar({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => signOutAction()}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Sign out
+                Sign Out
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>

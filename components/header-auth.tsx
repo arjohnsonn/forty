@@ -17,7 +17,7 @@ export default async function AuthButton() {
       <form action={signOutAction}>
         <ThemeSwitcher />
         <Button type="submit" variant={"outline"}>
-          Sign out
+          Sign Out
         </Button>
       </form>
     </div>
