@@ -181,6 +181,7 @@ export const createCheckoutSession = async () => {
   try {
     const session = await getStripe().checkout.sessions.create({
       mode: "payment",
+      allow_promotion_codes: true,
       customer_email: user.email ?? undefined,
       line_items: [
         {
