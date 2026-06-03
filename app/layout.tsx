@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { SchedulesProvider } from "@/lib/schedules";
 import ClientErrorGuard from "@/components/client-error-guard";
 import { CreditsToast } from "@/components/credits-toast";
+import { Analytics } from "@vercel/analytics/next"
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -87,6 +88,7 @@ export default async function RootLayout({
           </main>
           <Toaster />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
