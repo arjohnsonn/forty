@@ -3,6 +3,7 @@
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Calendar,
@@ -295,7 +296,14 @@ export function Sidebar({
           className="flex items-center justify-center border-b border-b-foreground/10 p-4 pt-5 transition-colors hover:text-zinc-400"
           title="New chat"
         >
-          <GraduationCap className="h-5 w-5 flex-shrink-0" />
+          <Image
+            src="/forty-logo.png"
+            alt="Forty"
+            width={28}
+            height={28}
+            className="flex-shrink-0"
+            priority
+          />
           <h1 className="ml-2 overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
             Forty
           </h1>

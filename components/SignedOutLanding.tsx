@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { signInWithGoogleAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { GoogleIcon } from "@/components/google-icon";
@@ -7,6 +8,14 @@ export default function SignedOutLanding() {
   return (
     <div className="flex flex-1 flex-col p-4">
       <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+        <Image
+          src="/forty-logo.png"
+          alt="Forty"
+          width={72}
+          height={72}
+          priority
+          className="mb-2"
+        />
         <h1 className="text-2xl sm:text-3xl">
           Plan your{" "}
           <span className="font-semibold text-texas">perfect UT schedule</span>
