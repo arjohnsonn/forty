@@ -68,6 +68,7 @@ import { Slider } from "@/components/ui/slider";
 import { CourseDialog } from "@/components/CourseChips";
 import { cn } from "@/lib/utils";
 import { CURRENT_TERM, isCurrentTerm } from "@/lib/term";
+import { BUILD_HANDOFF_KEY } from "@/lib/audit";
 
 type Desired = {
   course: BrowseCourse;
@@ -936,6 +937,19 @@ export default function BuildView() {
       }),
     );
   };
+
+  useEffect(() => {
+    let handoff: Preset | null = null;
+    try {
+      const raw = window.sessionStorage.getItem(BUILD_HANDOFF_KEY);
+      window.sessionStorage.removeItem(BUILD_HANDOFF_KEY);
+      handoff = raw ? (JSON.parse(raw) as Preset) : null;
+    } catch {
+      handoff = null;
+    }
+    if (handoff && Array.isArray(handoff.courses) && handoff.courses.length) loadPreset(handoff);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleDayOff = (d: number) =>
     setDaysOff((prev) =>

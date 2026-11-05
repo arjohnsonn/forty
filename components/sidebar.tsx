@@ -325,6 +325,12 @@ export function Sidebar({
               active={pathname === "/build"}
             />
             <SidebarItem
+              href="/plan"
+              icon={<GraduationCap className="h-4 w-4" />}
+              text="Degree plan"
+              active={pathname === "/plan"}
+            />
+            <SidebarItem
               href="/calendar"
               icon={<CalendarDays className="h-4 w-4" />}
               text="Calendar"
