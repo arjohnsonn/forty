@@ -544,24 +544,40 @@ function Results({
           const plan = planById.get(r.id)!;
           const suggestions = plan.suggestions.filter((s) => !hideUnmet || s.prereq !== "not_met");
           const hidden = plan.suggestions.length - suggestions.length;
+          const picks = result.plan.flatMap((t) =>
+            t.courses.filter((c) => c.requirementId === r.id).map((c) => `${c.code} · ${t.term}`),
+          );
           return (
-            <div key={r.id} className="rounded-xl border bg-card p-5">
-              <div className="flex items-start justify-between gap-4">
+            <details key={r.id} className="group/req rounded-xl border bg-card">
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-4 rounded-xl p-5 transition-colors hover:bg-muted/30 [&::-webkit-details-marker]:hidden">
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">{r.section}</p>
                   <p className="mt-1 text-sm font-medium">{heading(plan.note || r.text)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {picks.length ? (
+                      <>
+                        Planned: <span className="font-mono text-foreground">{picks.join(", ")}</span>
+                      </>
+                    ) : (
+                      `${plan.suggestions.length} option${plan.suggestions.length === 1 ? "" : "s"} in ${CURRENT_TERM}`
+                    )}
+                  </p>
                 </div>
-                {r.lacking && (
-                  <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{r.lacking} left</span>
-                )}
-              </div>
-              <details className="group mt-2">
-                <summary className="cursor-pointer list-none text-xs text-muted-foreground transition-colors hover:text-foreground">
-                  <span className="group-open:hidden">Show audit wording</span>
-                  <span className="hidden group-open:inline">Hide audit wording</span>
-                </summary>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{r.text}</p>
-              </details>
+                <div className="flex shrink-0 items-center gap-3">
+                  {r.lacking && (
+                    <span className="font-mono text-xs tabular-nums text-muted-foreground">{r.lacking} left</span>
+                  )}
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open/req:rotate-180" />
+                </div>
+              </summary>
+              <div className="px-5 pb-5">
+                <details className="group/wording">
+                  <summary className="cursor-pointer list-none text-xs text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+                    <span className="group-open/wording:hidden">Show audit wording</span>
+                    <span className="hidden group-open/wording:inline">Hide audit wording</span>
+                  </summary>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{r.text}</p>
+                </details>
 
               {suggestions.length > 0 && (
                 <ul className="mt-4 divide-y border-t">
@@ -610,7 +626,8 @@ function Results({
               {!plan.suggestions.length && !plan.notOffered.length && !plan.filteredOut && (
                 <p className="mt-3 text-xs text-muted-foreground">No matching {CURRENT_TERM} courses found</p>
               )}
-            </div>
+              </div>
+            </details>
           );
         })}
 
