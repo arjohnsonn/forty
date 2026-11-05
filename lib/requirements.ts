@@ -136,8 +136,14 @@ export type Rule = {
   core: string;
   exclude: string[];
   needed: number;
+  neededHours: number | null;
   note: string;
 };
+
+function neededHours(lacking: string): number | null {
+  const m = lacking.match(/(\d+(?:\.\d+)?)\s+hours?/i);
+  return m ? Number(m[1]) : null;
+}
 
 function neededCount(lacking: string): number {
   const m = lacking.match(/(\d+(?:\.\d+)?)\s+(hours?|courses?)/i);
@@ -159,6 +165,7 @@ export function requirementRule(req: AuditRequirement, taken: Set<string>): Rule
     core: "",
     exclude: [],
     needed: neededCount(req.lacking),
+    neededHours: neededHours(req.lacking),
     note: "",
   };
 

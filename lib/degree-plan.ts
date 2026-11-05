@@ -38,6 +38,17 @@ const scoreOf = (r: CandidateRow) =>
   (computeGpa(r.grade_data) ?? 3) + 0.4 * (r.ces_rating ?? 4) + 0.2 * (r.rmp_rating ?? 3.5);
 const hoursOf = (code: string) => courseMeta(code)?.credits ?? 3;
 const codeOf = (r: CandidateRow) => (r.course_code ? normalizeCode(r.course_code) : null);
+const DELIVERY_SUFFIX = /-(?:WB|DEN|DAL|HOU|UTNY|DC|TEMBA|FRI)$/;
+const titleOf = (r: CandidateRow) => r.course_header.replace(DELIVERY_SUFFIX, "").trim();
+const words = (title: string) => new Set(title.split(/[^A-Z0-9]+/).filter((w) => w.length > 2));
+function sameCourse(a: string, b: string) {
+  const wa = words(a);
+  const wb = words(b);
+  const shared = Array.from(wa).filter((w) => wb.has(w)).length;
+  return shared / Math.max(1, Math.min(wa.size, wb.size)) >= 0.6;
+}
+const distinctTitles = (titles: string[]) =>
+  titles.reduce<string[]>((acc, t) => (acc.some((x) => sameCourse(x, t)) ? acc : [...acc, t]), []);
 
 function termsFrom(start: string, n: number): string[] {
   const [season, yearRaw] = start.split(" ");
@@ -97,18 +108,26 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
 
   const requirements: RequirementPlan[] = rules.map((rule, i) => {
     const rows = rowsPerRule[i]!;
-    const titles = new Map<string, Set<string>>();
+    const titles = new Map<string, string[]>();
     for (const r of rows) {
       const code = codeOf(r);
-      if (code) (titles.get(code) ?? titles.set(code, new Set()).get(code)!).add(r.course_header);
+      if (code) titles.set(code, distinctTitles([...(titles.get(code) ?? []), titleOf(r)]));
     }
     const exclude = new Set(rule.exclude);
+    const seen: string[] = [];
+    const minHours = rule.neededHours != null && rule.neededHours >= 3 ? 3 : 0;
     const suggestions = rows
       .filter((r) => {
         const code = codeOf(r);
-        return !!code && !exclude.has(code) && (!taken.has(code) || (titles.get(code)?.size ?? 0) > 1);
+        return !!code && !exclude.has(code) && (!taken.has(code) || (titles.get(code)?.length ?? 0) > 1);
       })
-      .sort((a, b) => scoreOf(b) - scoreOf(a))
+      .sort((a, b) => Number(hoursOf(codeOf(a)!) < minHours) - Number(hoursOf(codeOf(b)!) < minHours) || scoreOf(b) - scoreOf(a))
+      .filter((r) => {
+        const key = titleOf(r);
+        if (seen.some((s) => sameCourse(s, key))) return false;
+        seen.push(key);
+        return true;
+      })
       .map((r): AuditSuggestion => {
         const code = codeOf(r)!;
         const p = prereqNow(code);
@@ -176,12 +195,14 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
           }
         }
       } else if (rule.kind === "pool") {
-        for (const s of plan.suggestions) {
-          if (count >= rule.needed) break;
+        const target = rule.neededHours ?? rule.needed;
+        const ranked = [...plan.suggestions].sort((a, b) => Number(a.prereq !== "met") - Number(b.prereq !== "met"));
+        for (const s of ranked) {
+          if (count >= target) break;
           const code = normalizeCode(s.courseCode ?? "");
           if (!code || reqOf.has(code) || !viable(code)) continue;
           pick(code, rule.id);
-          count++;
+          count += rule.neededHours != null ? hoursOf(code) : 1;
         }
       }
       filled.set(rule.id, count);
@@ -248,9 +269,9 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
     }
   }
   for (const { rule } of order) {
-    if (rule.kind === "courses" && (filled.get(rule.id) ?? 0) < rule.needed) {
-      notes.push(`No plannable option for: ${rule.note.replace(/^Take /, "")}`);
-    }
+    if (rule.kind !== "courses" || (filled.get(rule.id) ?? 0) >= rule.needed) continue;
+    const open = rule.groups.filter((g) => !g.some((c) => reqOf.get(c) === rule.id));
+    notes.push(`No plannable option yet for ${open.map((g) => g.join(" or ")).join(", ")}. Check prerequisites and when it's offered.`);
   }
 
   return { term: CURRENT_TERM, requirements, plan: plan.filter((t) => t.courses.length), notes: notes.slice(0, 6) };
