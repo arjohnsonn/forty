@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, Check, Loader2, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { CalendarPlus, Check, ChevronDown, Loader2, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CourseDialog } from "@/components/CourseChips";
 import { useToast } from "@/components/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
@@ -22,12 +28,14 @@ import { courseMeta, titleCase, type RetrievedSection } from "@/lib/courses";
 import { CURRENT_TERM } from "@/lib/term";
 import {
   BUILD_HANDOFF_KEY,
+  DEFAULT_FILTERS,
   normalizeCode,
   openRequirements,
   parseAudit,
   type AuditResult,
   type AuditSuggestion,
   type ParsedAudit,
+  type PlanFilters,
 } from "@/lib/audit";
 import { analyzeAudit } from "@/lib/degree-plan";
 import { cn } from "@/lib/utils";
@@ -60,6 +68,8 @@ export default function DegreePlanView() {
   const [openCourse, setOpenCourse] = useState<AuditSuggestion | null>(null);
   const [detail, setDetail] = useState<RetrievedSection | null>(null);
   const openRef = useRef<number | null>(null);
+  const [applying, setApplying] = useState(false);
+  const filterReq = useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -67,13 +77,13 @@ export default function DegreePlanView() {
         .from("degree_audits")
         .select("audit, result, updated_at")
         .maybeSingle();
-      if (error) toast({ variant: "destructive", title: "Couldn't load your saved degree plan" });
+      if (error) toast({ variant: "destructive", title: "Couldn't load your IDA plan" });
       const stored = (data as Saved | null) ?? null;
       setSaved(stored);
       setLoading(false);
       if (!stored) return;
       try {
-        const result = await analyzeAudit(supabase, stored.audit);
+        const result = await analyzeAudit(supabase, stored.audit, stored.result.filters ?? DEFAULT_FILTERS);
         const updated_at = new Date().toISOString();
         setSaved((cur) => (cur === stored ? { ...stored, result, updated_at } : cur));
         const {
@@ -110,7 +120,7 @@ export default function DegreePlanView() {
     }
     setAnalyzing(true);
     try {
-      const result = await analyzeAudit(supabase, audit);
+      const result = await analyzeAudit(supabase, audit, saved?.result.filters ?? DEFAULT_FILTERS);
       const updated_at = new Date().toISOString();
       const { error } = await supabase
         .from("degree_audits")
@@ -127,6 +137,31 @@ export default function DegreePlanView() {
     }
   };
 
+  const applyFilters = async (filters: PlanFilters) => {
+    if (!saved) return;
+    const base = saved;
+    const req = ++filterReq.current;
+    setApplying(true);
+    try {
+      const result = await analyzeAudit(supabase, base.audit, filters);
+      if (req !== filterReq.current) return;
+      const updated_at = new Date().toISOString();
+      setSaved((cur) => (cur?.audit === base.audit ? { ...cur, result, updated_at } : cur));
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const { error } = session
+        ? await supabase.from("degree_audits").update({ result, updated_at }).eq("user_id", session.user.id)
+        : { error: new Error("signed out") };
+      if (error) toast({ variant: "destructive", title: "Couldn't save your filters", description: "They'll reset on reload." });
+    } catch (e) {
+      console.error("[AuditDebug] filters failed:", e);
+      if (req === filterReq.current) toast({ variant: "destructive", title: "Couldn't apply filters", description: "Please try again." });
+    } finally {
+      if (req === filterReq.current) setApplying(false);
+    }
+  };
+
   const deleteAudit = async () => {
     setConfirmDelete(false);
     const {
@@ -136,11 +171,11 @@ export default function DegreePlanView() {
       ? await supabase.from("degree_audits").delete().eq("user_id", session.user.id)
       : { error: new Error("signed out") };
     if (error) {
-      toast({ variant: "destructive", title: "Couldn't delete your degree plan" });
+      toast({ variant: "destructive", title: "Couldn't delete your IDA plan" });
       return;
     }
     setSaved(null);
-    toast({ title: "Degree plan deleted" });
+    toast({ title: "IDA plan deleted" });
   };
 
   const openDetail = useCallback(
@@ -200,7 +235,7 @@ export default function DegreePlanView() {
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="shrink-0 border-b bg-background px-4 pb-3 pl-14 pt-5">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="shrink-0 text-lg font-medium text-foreground">Degree plan</h2>
+          <h2 className="shrink-0 text-lg font-medium text-foreground">IDA Planner</h2>
           {saved && !importing && (
             <>
               {saved.audit.program && (
@@ -216,7 +251,7 @@ export default function DegreePlanView() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  aria-label="Delete degree plan"
+                  aria-label="Delete IDA plan"
                   onClick={() => setConfirmDelete(true)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -293,6 +328,8 @@ export default function DegreePlanView() {
               onOpen={openDetail}
               onBuild={buildTerm}
               byCode={suggestionByCode}
+              onFilters={applyFilters}
+              applying={applying}
               onUpdate={() => setImporting(true)}
             />
           ) : null}
@@ -304,7 +341,7 @@ export default function DegreePlanView() {
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete degree plan?</DialogTitle>
+            <DialogTitle>Delete your IDA plan?</DialogTitle>
             <DialogDescription>This removes your saved audit and plan. You can paste it again anytime.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
@@ -321,7 +358,9 @@ export default function DegreePlanView() {
   );
 }
 
-const TERM_CAP = 16;
+const HOUR_OPTIONS = [12, 13, 14, 15, 16, 17, 18];
+const GPA_OPTIONS = [2.5, 3.0, 3.3, 3.5, 3.7];
+const RATING_OPTIONS = [3.5, 4.0, 4.3, 4.5];
 
 const MINOR_WORDS = new Set(["a", "an", "and", "at", "for", "in", "of", "on", "or", "the", "to", "with"]);
 const titleOf = (s: AuditSuggestion) =>
@@ -344,6 +383,8 @@ function Results({
   onOpen,
   onBuild,
   byCode,
+  onFilters,
+  applying,
   onUpdate,
 }: {
   saved: Saved;
@@ -352,9 +393,12 @@ function Results({
   onOpen: (s: AuditSuggestion) => void;
   onBuild: (codes: string[]) => void;
   byCode: Map<string, AuditSuggestion>;
+  onFilters: (f: PlanFilters) => void;
+  applying: boolean;
   onUpdate: () => void;
 }) {
   const { audit, result } = saved;
+  const filters = result.filters ?? DEFAULT_FILTERS;
   const open = openRequirements(audit);
   const planById = new Map(result.requirements.map((r) => [r.id, r]));
   const done = audit.requirements.filter((r) => r.status === "completed");
@@ -400,6 +444,8 @@ function Results({
         )}
       </section>
 
+      <FilterBar filters={filters} onChange={onFilters} applying={applying} />
+
       {result.plan.length > 0 && (
         <section className="space-y-4">
           <SectionTitle>Path to graduation</SectionTitle>
@@ -421,7 +467,7 @@ function Results({
                   <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
                     <div
                       className={cn("h-full rounded-full", current ? "bg-texas" : "bg-muted-foreground/40")}
-                      style={{ width: `${Math.min(100, (hours / TERM_CAP) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (hours / filters.maxHours) * 100)}%` }}
                     />
                   </div>
                   <ul className="mt-3 flex-1 space-y-2">
@@ -545,9 +591,14 @@ function Results({
                   ))}
                 </ul>
               )}
-              {hidden > 0 && (
+              {(hidden > 0 || !!plan.filteredOut) && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {hidden} more hidden for unmet prerequisites
+                  {[
+                    hidden > 0 && `${hidden} hidden for unmet prerequisites`,
+                    plan.filteredOut && `${plan.filteredOut} hidden by your filters`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
               )}
               {plan.notOffered.map((n) => (
@@ -556,7 +607,7 @@ function Results({
                   {n.seasons.length ? `, usually ${n.seasons.join(" and ")}` : ""}
                 </p>
               ))}
-              {!plan.suggestions.length && !plan.notOffered.length && (
+              {!plan.suggestions.length && !plan.notOffered.length && !plan.filteredOut && (
                 <p className="mt-3 text-xs text-muted-foreground">No matching {CURRENT_TERM} courses found</p>
               )}
             </div>
@@ -600,6 +651,110 @@ function Results({
         )}
       </section>
     </div>
+  );
+}
+
+function FilterBar({
+  filters,
+  onChange,
+  applying,
+}: {
+  filters: PlanFilters;
+  onChange: (f: PlanFilters) => void;
+  applying: boolean;
+}) {
+  const isDefault =
+    filters.maxHours === DEFAULT_FILTERS.maxHours &&
+    filters.minGpa == null &&
+    filters.minRating == null &&
+    filters.minRmp == null;
+  const strict = filters.minGpa != null || filters.minRating != null || filters.minRmp != null;
+  return (
+    <section className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterMenu
+          label="Per semester"
+          value={`${filters.maxHours} hrs max`}
+          active={filters.maxHours !== DEFAULT_FILTERS.maxHours}
+          options={HOUR_OPTIONS.map((h) => ({ label: `${h} hours`, value: h }))}
+          onSelect={(v) => onChange({ ...filters, maxHours: v ?? DEFAULT_FILTERS.maxHours })}
+        />
+        <FilterMenu
+          label="Course GPA"
+          value={filters.minGpa != null ? `${filters.minGpa.toFixed(1)}+` : "Any"}
+          active={filters.minGpa != null}
+          options={GPA_OPTIONS.map((g) => ({ label: `${g.toFixed(1)} or higher`, value: g }))}
+          anyLabel="Any GPA"
+          onSelect={(v) => onChange({ ...filters, minGpa: v })}
+        />
+        <FilterMenu
+          label="Course rating"
+          value={filters.minRating != null ? `${filters.minRating.toFixed(1)}+` : "Any"}
+          active={filters.minRating != null}
+          options={RATING_OPTIONS.map((g) => ({ label: `${g.toFixed(1)} or higher`, value: g }))}
+          anyLabel="Any rating"
+          onSelect={(v) => onChange({ ...filters, minRating: v })}
+        />
+        <FilterMenu
+          label="RateMyProfessors"
+          value={filters.minRmp != null ? `${filters.minRmp.toFixed(1)}+` : "Any"}
+          active={filters.minRmp != null}
+          options={RATING_OPTIONS.map((g) => ({ label: `${g.toFixed(1)} or higher`, value: g }))}
+          anyLabel="Any RMP"
+          onSelect={(v) => onChange({ ...filters, minRmp: v })}
+        />
+        {!isDefault && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => onChange(DEFAULT_FILTERS)}>
+            Reset
+          </Button>
+        )}
+        {applying && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Updating plan" />}
+      </div>
+      {strict && (
+        <p className="text-xs text-muted-foreground">
+          Courses without that data are hidden too. Required courses your audit names are always kept
+        </p>
+      )}
+    </section>
+  );
+}
+
+function FilterMenu({
+  label,
+  value,
+  active,
+  options,
+  anyLabel,
+  onSelect,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+  options: { label: string; value: number }[];
+  anyLabel?: string;
+  onSelect: (v: number | null) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors hover:bg-muted",
+          active && "border-texas/40 text-texas",
+        )}
+      >
+        <span className={cn(!active && "text-muted-foreground")}>{label}</span>
+        <span className="font-mono tabular-nums">{value}</span>
+        <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {anyLabel && <DropdownMenuItem onClick={() => onSelect(null)}>{anyLabel}</DropdownMenuItem>}
+        {options.map((o) => (
+          <DropdownMenuItem key={o.value} onClick={() => onSelect(o.value)}>
+            {o.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

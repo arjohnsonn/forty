@@ -51,13 +51,24 @@ export type RequirementPlan = {
   note: string;
   needed: number;
   suggestions: AuditSuggestion[];
+  filteredOut?: number;
   notOffered: { code: string; seasons: string[] }[];
 };
 
 export type PlanCourse = { code: string; requirementId: string; warning: string };
 export type PlanTerm = { term: string; courses: PlanCourse[] };
 
+export type PlanFilters = {
+  maxHours: number;
+  minGpa: number | null;
+  minRating: number | null;
+  minRmp: number | null;
+};
+
+export const DEFAULT_FILTERS: PlanFilters = { maxHours: 16, minGpa: null, minRating: null, minRmp: null };
+
 export type AuditResult = {
+  filters?: PlanFilters;
   term: string;
   requirements: RequirementPlan[];
   plan: PlanTerm[];

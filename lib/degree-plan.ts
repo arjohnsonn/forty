@@ -2,9 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeGpa, courseMeta } from "@/lib/courses";
 import { CURRENT_TERM } from "@/lib/term";
 import {
+  DEFAULT_FILTERS,
   normalizeCode,
   openRequirements,
   type AuditResult,
+  type PlanFilters,
   type AuditSuggestion,
   type ParsedAudit,
   type PlanTerm,
@@ -15,7 +17,6 @@ import { checkPrereq, parsePrereq, type ParsedPrereq } from "@/lib/prereqs";
 
 const SUGGESTIONS = 8;
 const MAX_TERMS = 8;
-const TERM_CAP = 16;
 
 type CandidateRow = {
   course_id: number;
@@ -32,7 +33,17 @@ type CandidateRow = {
   seasons: string[] | null;
 };
 
-type CourseInfo = { offeredNow: boolean; seasons: string[]; prereq: ParsedPrereq | null; score: number };
+type CourseInfo = {
+  offeredNow: boolean;
+  seasons: string[];
+  prereq: ParsedPrereq | null;
+  score: number;
+  passes: boolean;
+};
+
+const meets = (value: number | null, min: number | null) => min == null || (value != null && value >= min);
+const passesFilters = (r: CandidateRow, f: PlanFilters) =>
+  meets(computeGpa(r.grade_data), f.minGpa) && meets(r.ces_rating, f.minRating) && meets(r.rmp_rating, f.minRmp);
 
 const scoreOf = (r: CandidateRow) =>
   (computeGpa(r.grade_data) ?? 3) + 0.4 * (r.ces_rating ?? 4) + 0.2 * (r.rmp_rating ?? 3.5);
@@ -78,7 +89,11 @@ async function fetchCandidates(supabase: SupabaseClient, rule: Rule): Promise<Ca
   return (data ?? []) as CandidateRow[];
 }
 
-export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit): Promise<AuditResult> {
+export async function analyzeAudit(
+  supabase: SupabaseClient,
+  audit: ParsedAudit,
+  filters: PlanFilters = DEFAULT_FILTERS,
+): Promise<AuditResult> {
   const taken = new Set(audit.taken);
   const open = openRequirements(audit);
   const rules = open.map((r) => requirementRule(r, taken));
@@ -91,7 +106,13 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
     const s = scoreOf(r);
     const prev = courses.get(code);
     if (!prev || s > prev.score)
-      courses.set(code, { offeredNow: true, seasons: r.seasons ?? [], prereq: parsePrereq(r.description), score: s });
+      courses.set(code, {
+        offeredNow: true,
+        seasons: r.seasons ?? [],
+        prereq: parsePrereq(r.description),
+        score: s,
+        passes: passesFilters(r, filters),
+      });
   }
 
   const missing = Array.from(new Set(rules.flatMap((r) => r.groups.flat()))).filter((c) => !courses.has(c) && !taken.has(c));
@@ -100,7 +121,8 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
     if (error) throw error;
     for (const h of (data ?? []) as { course_code: string; seasons: string[] | null; description: string | null }[]) {
       const code = normalizeCode(h.course_code);
-      if (code) courses.set(code, { offeredNow: false, seasons: h.seasons ?? [], prereq: parsePrereq(h.description), score: 0 });
+      if (code)
+        courses.set(code, { offeredNow: false, seasons: h.seasons ?? [], prereq: parsePrereq(h.description), score: 0, passes: true });
     }
   }
 
@@ -118,7 +140,7 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
     const minHours = rule.neededHours != null && rule.neededHours >= 3 ? 3 : 0;
     const named = new Set(rule.groups.flat());
     const rank = (r: CandidateRow) => (named.has(codeOf(r)!) ? 0 : 2) + Number(hoursOf(codeOf(r)!) < minHours);
-    const suggestions = rows
+    const distinct = rows
       .filter((r) => {
         const code = codeOf(r);
         return !!code && !exclude.has(code) && (!taken.has(code) || (titles.get(code)?.length ?? 0) > 1);
@@ -129,7 +151,9 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
         if (seen.some((s) => sameCourse(s, key))) return false;
         seen.push(key);
         return true;
-      })
+      });
+    const kept = distinct.filter((r) => (rule.kind === "courses" && named.has(codeOf(r)!)) || passesFilters(r, filters));
+    const suggestions = kept
       .map((r): AuditSuggestion => {
         const code = codeOf(r)!;
         const p = prereqNow(code);
@@ -158,6 +182,7 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
       note: rule.note,
       needed: rule.needed,
       suggestions,
+      filteredOut: distinct.length - kept.length,
       notOffered: rule.groups
         .flat()
         .filter((c) => courses.get(c)?.offeredNow === false)
@@ -190,7 +215,7 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
         for (const group of rule.groups) {
           if (count >= rule.needed) break;
           if (group.some((c) => reqOf.get(c) === rule.id)) continue;
-          const choice = group.find(viable);
+          const choice = group.find((c) => viable(c) && courses.get(c)!.passes) ?? group.find(viable);
           if (choice) {
             pick(choice, rule.id);
             count++;
@@ -198,9 +223,11 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
         }
       } else if (rule.kind === "pool") {
         const target = rule.neededHours ?? rule.needed;
-        const score = (s: AuditSuggestion) => courses.get(normalizeCode(s.courseCode ?? "") ?? "")?.score ?? 0;
+        const code = (s: AuditSuggestion) => normalizeCode(s.courseCode ?? "") ?? "";
+        const score = (s: AuditSuggestion) => courses.get(code(s))?.score ?? 0;
+        const short = (s: AuditSuggestion) => Number(rule.neededHours != null && hoursOf(code(s)) < Math.min(3, rule.neededHours));
         const ranked = [...plan.suggestions].sort(
-          (a, b) => Number(a.prereq !== "met") - Number(b.prereq !== "met") || score(b) - score(a),
+          (a, b) => short(a) - short(b) || Number(a.prereq !== "met") - Number(b.prereq !== "met") || score(b) - score(a),
         );
         for (const s of ranked) {
           if (count >= target) break;
@@ -250,7 +277,7 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
       const offered = t === 0 ? c.offeredNow : !c.seasons.length || c.seasons.includes(season);
       if (!offered) continue;
       const p = checkPrereq(c.prereq, have, doneHours);
-      if (p.status === "not_met" || load + hoursOf(code) > TERM_CAP) continue;
+      if (p.status === "not_met" || load + hoursOf(code) > filters.maxHours) continue;
       termOf.set(code, t);
       load += hoursOf(code);
       plan[t]!.courses.push({
@@ -273,11 +300,18 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
       if (before) notes.push(`Take ${before} before ${code}.`);
     }
   }
-  for (const { rule } of order) {
+  for (const { rule, plan: req } of order) {
+    if (rule.kind === "pool" && (filled.get(rule.id) ?? 0) < (rule.neededHours ?? rule.needed)) {
+      notes.push(
+        req.filteredOut
+          ? `Not enough courses match your filters for: ${rule.note.replace(/\.$/, "")}. Loosen a filter to fill it.`
+          : `Not enough plannable courses for: ${rule.note.replace(/\.$/, "")}.`,
+      );
+    }
     if (rule.kind !== "courses" || (filled.get(rule.id) ?? 0) >= rule.needed) continue;
     const open = rule.groups.filter((g) => !g.some((c) => reqOf.get(c) === rule.id));
     notes.push(`No plannable option yet for ${open.map((g) => g.join(" or ")).join(", ")}. Check prerequisites and when it's offered.`);
   }
 
-  return { term: CURRENT_TERM, requirements, plan: plan.filter((t) => t.courses.length), notes: notes.slice(0, 6) };
+  return { filters, term: CURRENT_TERM, requirements, plan: plan.filter((t) => t.courses.length), notes: notes.slice(0, 6) };
 }

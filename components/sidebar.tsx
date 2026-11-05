@@ -327,7 +327,7 @@ export function Sidebar({
             <SidebarItem
               href="/plan"
               icon={<GraduationCap className="h-4 w-4" />}
-              text="Degree plan"
+              text="IDA Planner"
               active={pathname === "/plan"}
             />
             <SidebarItem
