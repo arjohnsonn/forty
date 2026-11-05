@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/utils/supabase/server";
 
 const RMP_GQL = "https://www.ratemyprofessors.com/graphql";
 const RMP_AUTH = "Basic dGVzdDp0ZXN0"; // public hardcoded RMP web credential (test:test)
@@ -73,10 +74,19 @@ const mapReviews = (edges: any[] | undefined) =>
 const CACHE = { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" };
 
 export async function GET(req: Request, { params }: { params: Promise<{ legacyId: string }> }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "sign in required" }, { status: 401 });
+
   const { legacyId } = await params;
   const id = Number(legacyId);
-  if (!Number.isFinite(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9)
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
   const course = new URL(req.url).searchParams.get("course");
+  if (course != null && !/^[A-Za-z0-9 .&/-]{1,24}$/.test(course))
+    return NextResponse.json({ error: "invalid course" }, { status: 400 });
 
   try {
     // ?course=CODE -> just that course's reviews (powers the panel's review filter).

@@ -20,8 +20,16 @@ export async function POST(req: Request) {
     return new Response("Invalid signature", { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded"
+  ) {
     const session = event.data.object; // narrowed to a Checkout.Session
+    // Delayed payment methods complete unpaid; they're credited on async_payment_succeeded instead.
+    if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+      console.log("[StripeWebhook] checkout not paid yet:", session.id, session.payment_status);
+      return new Response("ok", { status: 200 });
+    }
     const userId = session.metadata?.user_id;
     // Credit the pre-discount amount, so a promo code is bonus credit (not less).
     const amount = (session.amount_subtotal ?? 0) / 100;
@@ -51,12 +59,12 @@ export async function POST(req: Request) {
     }
   }
 
-  // Refund: claw back the refunded amount from the user's credit balance.
-  if (event.type === "refund.created") {
-    const refund = event.data.object; // narrowed to a Refund
+  // Refund or chargeback: claw back that amount from the user's credit balance.
+  if (event.type === "refund.created" || event.type === "charge.dispute.created") {
+    const reversal = event.data.object; // narrowed to a Refund or Dispute
     const paymentIntent =
-      typeof refund.payment_intent === "string" ? refund.payment_intent : null;
-    const amount = (refund.amount ?? 0) / 100;
+      typeof reversal.payment_intent === "string" ? reversal.payment_intent : null;
+    const amount = (reversal.amount ?? 0) / 100;
     if (!paymentIntent || amount <= 0) {
       console.error("[StripeWebhook] skipping refund - missing/zero", {
         hasPaymentIntent: !!paymentIntent,

@@ -42,7 +42,6 @@ interface Env {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
-  GUEST_RATE_LIMITER: RateLimit;
   USER_RATE_LIMITER: RateLimit;
   ALLOWED_ORIGINS?: string;
   MATCH_THRESHOLD?: string;
@@ -485,6 +484,22 @@ function corsHeaders(req: Request, env: Env): Record<string, string> {
   };
 }
 
+const MAX_HISTORY = 20;
+const MAX_MESSAGE_CHARS = 4000;
+const MAX_HISTORY_CHARS = 24000;
+const MAX_STORED_MESSAGES = 400;
+
+const messageText = (m: any): string =>
+  (typeof m?.content === "string"
+    ? m.content
+    : Array.isArray(m?.parts)
+      ? m.parts
+          .filter((p: any) => p?.type === "text")
+          .map((p: any) => p.text)
+          .join(" ")
+      : ""
+  ).trim();
+
 const errorJson = (
   cors: Record<string, string>,
   status: number,
@@ -794,11 +809,6 @@ export default {
         );
       const jwtToken = authorization.split(" ")[1] ?? "";
 
-      const ip =
-        req.headers.get("cf-connecting-ip") ??
-        req.headers.get("x-forwarded-for") ??
-        "unknown";
-
       const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
         global: { headers: { Authorization: authorization } },
         auth: { persistSession: false },
@@ -808,21 +818,11 @@ export default {
         data: { user },
       } = await supabase.auth.getUser(jwtToken);
 
-      // Rate limit guests only via Cloudflare's native limiter.
-      if (!user && env.GUEST_RATE_LIMITER) {
-        const { success } = await env.GUEST_RATE_LIMITER.limit({ key: ip });
-        if (!success) {
-          return errorJson(
-            cors,
-            429,
-            "Rate Limit Error",
-            "Too many requests - please slow down or sign in.",
-          );
-        }
-      }
+      if (!user)
+        return errorJson(cors, 401, "Auth Error", "Sign in to chat with Forty.");
 
       // Per-user rate limit: blocks spam and burst requests racing the async balance check.
-      if (user && env.USER_RATE_LIMITER) {
+      if (env.USER_RATE_LIMITER) {
         const { success } = await env.USER_RATE_LIMITER.limit({ key: user.id });
         if (!success) {
           return errorJson(
@@ -834,8 +834,8 @@ export default {
         }
       }
 
-      // Logged-in users pay from a prepaid credit balance (first call grants the free trial credit).
-      if (user) {
+      // Users pay from a prepaid credit balance (first call grants the free trial credit).
+      {
         // numeric returns as a string via PostgREST; coerce. Null = RPC error, so fail open.
         const { data, error } = await supabase.rpc("credit_balance");
         if (!error && data != null && Number(data) <= 0) {
@@ -857,25 +857,35 @@ export default {
       const { chatId, messages, agentic } = body;
       // Agentic scheduling (the expensive buildSchedule tool) is off unless the client opts in.
       const schedulingOn = agentic === true;
-      if (!Array.isArray(messages) || messages.length === 0) {
+      if (!Array.isArray(messages) || messages.length === 0 || messages.length > MAX_STORED_MESSAGES) {
         return errorJson(
           cors,
           400,
           "Request Error",
-          "Missing 'messages' in body.",
+          "Missing or too many 'messages' in body.",
         );
       }
       // useChat POSTs the full messages array; embed the latest user message.
       const lastUser = [...messages].reverse().find((m) => m?.role === "user");
-      const message =
-        (typeof lastUser?.content === "string" && lastUser.content.trim()) ||
-        (Array.isArray(lastUser?.parts)
-          ? lastUser.parts
-              .filter((p: any) => p?.type === "text")
-              .map((p: any) => p.text)
-              .join(" ")
-              .trim()
-          : "");
+      const message = messageText(lastUser);
+      if (message.length > MAX_MESSAGE_CHARS)
+        return errorJson(
+          cors,
+          400,
+          "Request Error",
+          `Message is too long. Keep it under ${MAX_MESSAGE_CHARS.toLocaleString()} characters.`,
+        );
+      // Only user/assistant text reaches the model, newest first within a size budget.
+      const history: CoreMessage[] = [];
+      let budget = MAX_HISTORY_CHARS;
+      for (const m of messages.slice(-MAX_HISTORY).reverse()) {
+        if (m?.role !== "user" && m?.role !== "assistant") continue;
+        const text = messageText(m).slice(0, MAX_MESSAGE_CHARS);
+        if (!text) continue;
+        if (text.length > budget) break;
+        budget -= text.length;
+        history.unshift({ role: m.role, content: text });
+      }
       if (!message)
         return errorJson(
           cors,
@@ -1024,7 +1034,7 @@ export default {
 
       const completionMessages: CoreMessage[] = [
         { role: "user", content: `Sections:\n${injectedSections}` },
-        ...messages,
+        ...history,
       ];
 
       const google = createGoogleGenerativeAI({
@@ -1523,7 +1533,7 @@ export default {
             }),
             async onFinish({ response, usage }) {
               // Debit this turn's cost from the user's prepaid credits at the retail markup.
-              if (user && usage) {
+              if (usage) {
                 const inRate = env.GEMINI_INPUT_USD_PER_1M
                   ? Number(env.GEMINI_INPUT_USD_PER_1M)
                   : 0.3;
@@ -1593,7 +1603,7 @@ export default {
                 dataStream.writeMessageAnnotation(a);
 
               // Only logged-in users persist conversations.
-              if (!user || !chatId) return;
+              if (!chatId) return;
               const saved = appendResponseMessages({
                 messages: messages as any,
                 responseMessages: response.messages,
