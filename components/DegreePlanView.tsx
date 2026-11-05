@@ -68,8 +68,27 @@ export default function DegreePlanView() {
         .select("audit, result, updated_at")
         .maybeSingle();
       if (error) toast({ variant: "destructive", title: "Couldn't load your saved degree plan" });
-      setSaved((data as Saved | null) ?? null);
+      const stored = (data as Saved | null) ?? null;
+      setSaved(stored);
       setLoading(false);
+      if (!stored) return;
+      try {
+        const result = await analyzeAudit(supabase, stored.audit);
+        const updated_at = new Date().toISOString();
+        setSaved((cur) => (cur === stored ? { ...stored, result, updated_at } : cur));
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          await supabase
+            .from("degree_audits")
+            .update({ result, updated_at })
+            .eq("user_id", session.user.id)
+            .eq("updated_at", stored.updated_at);
+        }
+      } catch (e) {
+        console.error("[AuditDebug] refresh failed:", e);
+      }
     })();
   }, [supabase, toast]);
 
