@@ -96,7 +96,7 @@ export function TopUpDialog({
           </div>
           <p className="text-xs text-muted-foreground">
             {valid
-              ? `≈ ${estMessages(dollars)} messages - credits never expire`
+              ? `≈ ${estMessages(dollars)} messages, credits never expire`
               : `Enter an amount between $${MIN_TOPUP_USD} and $500`}
           </p>
         </div>
@@ -109,8 +109,8 @@ export function TopUpDialog({
           {loading
             ? "Starting…"
             : valid
-              ? `Add $${dollars.toFixed(2)} in Credits`
-              : "Add Credits"}
+              ? `Add $${dollars.toFixed(2)} in credits`
+              : "Add credits"}
         </Button>
         <p className="text-center text-xs text-muted-foreground">
           By continuing you agree to our{" "}
