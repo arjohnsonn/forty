@@ -116,12 +116,14 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
     const exclude = new Set(rule.exclude);
     const seen: string[] = [];
     const minHours = rule.neededHours != null && rule.neededHours >= 3 ? 3 : 0;
+    const named = new Set(rule.groups.flat());
+    const rank = (r: CandidateRow) => (named.has(codeOf(r)!) ? 0 : 2) + Number(hoursOf(codeOf(r)!) < minHours);
     const suggestions = rows
       .filter((r) => {
         const code = codeOf(r);
         return !!code && !exclude.has(code) && (!taken.has(code) || (titles.get(code)?.length ?? 0) > 1);
       })
-      .sort((a, b) => Number(hoursOf(codeOf(a)!) < minHours) - Number(hoursOf(codeOf(b)!) < minHours) || scoreOf(b) - scoreOf(a))
+      .sort((a, b) => rank(a) - rank(b) || scoreOf(b) - scoreOf(a))
       .filter((r) => {
         const key = titleOf(r);
         if (seen.some((s) => sameCourse(s, key))) return false;
@@ -196,7 +198,10 @@ export async function analyzeAudit(supabase: SupabaseClient, audit: ParsedAudit)
         }
       } else if (rule.kind === "pool") {
         const target = rule.neededHours ?? rule.needed;
-        const ranked = [...plan.suggestions].sort((a, b) => Number(a.prereq !== "met") - Number(b.prereq !== "met"));
+        const score = (s: AuditSuggestion) => courses.get(normalizeCode(s.courseCode ?? "") ?? "")?.score ?? 0;
+        const ranked = [...plan.suggestions].sort(
+          (a, b) => Number(a.prereq !== "met") - Number(b.prereq !== "met") || score(b) - score(a),
+        );
         for (const s of ranked) {
           if (count >= target) break;
           const code = normalizeCode(s.courseCode ?? "");
