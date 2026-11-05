@@ -5,6 +5,7 @@ import {
   assignLanes,
   colorIndexFor,
   courseHexShade,
+  uniqueLabel,
   type ScheduleSection,
   type TimeBlock,
 } from "@/lib/courses";
@@ -43,7 +44,11 @@ const DAY_CODES = ["M", "T", "W", "Th", "F", "Sa", "Su"];
 export function exportJson(s: ExportSchedule) {
   download(
     JSON.stringify(
-      { name: s.name, sections: s.sections, blocks: s.blocks },
+      {
+        name: s.name,
+        sections: s.sections.map((sec) => ({ unique: uniqueLabel(sec.section_id), ...sec })),
+        blocks: s.blocks,
+      },
       null,
       2,
     ),
@@ -55,7 +60,7 @@ export function exportJson(s: ExportSchedule) {
 export function exportTxt(s: ExportSchedule) {
   const lines = [s.name, "=".repeat(s.name.length), ""];
   for (const sec of s.sections) {
-    lines.push(`${sec.course_code} ${sec.course_title}`.trim());
+    lines.push(`${`${sec.course_code} ${sec.course_title}`.trim()} (Unique ${uniqueLabel(sec.section_id)})`);
     if (sec.instructors.length) lines.push(`  ${sec.instructors.join(", ")}`);
     for (const m of sec.meetings) {
       const r = parseHourRange(m.hours);
@@ -103,6 +108,7 @@ export function exportIcs(s: ExportSchedule) {
     dayIdx: number,
     startMin: number,
     endMin: number,
+    description = "",
   ) =>
     events.push(
       [
@@ -110,6 +116,7 @@ export function exportIcs(s: ExportSchedule) {
         `UID:${uid}`,
         `SUMMARY:${escapeIcs(summary)}`,
         location ? `LOCATION:${escapeIcs(location)}` : "",
+        description ? `DESCRIPTION:${escapeIcs(description)}` : "",
         `DTSTART:${dateFor(dayIdx)}T${timeFor(startMin)}`,
         `DTEND:${dateFor(dayIdx)}T${timeFor(endMin)}`,
         "RRULE:FREQ=WEEKLY;COUNT=15",
@@ -133,6 +140,7 @@ export function exportIcs(s: ExportSchedule) {
           d,
           r.startMin,
           r.endMin,
+          [`Unique ${uniqueLabel(sec.section_id)}`, sec.instructors.join(", ")].filter(Boolean).join("\n"),
         );
     }
   }
@@ -251,7 +259,7 @@ export function exportPng(s: ExportSchedule) {
             startMin: r.startMin,
             endMin: r.endMin,
             code: sec.course_code,
-            location: m.location,
+            location: [uniqueLabel(sec.section_id), m.location].filter(Boolean).join(" · "),
             idx,
             conflict: false,
           });

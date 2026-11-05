@@ -164,6 +164,8 @@ export function parseHourRange(raw: string): { startMin: number; endMin: number 
   return { startMin, endMin };
 }
 
+export const uniqueLabel = (sectionId: number) => String(sectionId).padStart(5, "0");
+
 /** 540 -> "9:00 AM". */
 export function minuteLabel(min: number): string {
   let h = Math.floor(min / 60);
