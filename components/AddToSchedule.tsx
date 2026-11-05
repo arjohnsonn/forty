@@ -28,6 +28,7 @@ import {
   type ScheduleSection,
 } from "@/lib/courses";
 import { cn } from "@/lib/utils";
+import { isCurrentTerm } from "@/lib/term";
 
 /** Courses + time blocks in `s` that this section would overlap. */
 const conflictsIn = (section: ScheduleSection, s: ScheduleRow): string[] => [
@@ -43,8 +44,13 @@ export default function AddToSchedule({
   section: ScheduleSection;
   className?: string;
 }) {
-  const { schedules, createSchedule, addSection, removeSection } =
-    useSchedules();
+  const {
+    schedules: allSchedules,
+    createSchedule,
+    addSection,
+    removeSection,
+  } = useSchedules();
+  const schedules = allSchedules.filter((s) => isCurrentTerm(s.term));
   const { toast } = useToast();
   const router = useRouter();
   const [pending, setPending] = useState<{
@@ -151,7 +157,7 @@ export default function AddToSchedule({
                 {has ? (
                   <>
                     <Check className="h-3.5 w-3.5 shrink-0 group-hover:hidden" />
-                    <X className="hidden h-3.5 w-3.5 shrink-0 text-red-500 group-hover:block" />
+                    <X className="hidden h-3.5 w-3.5 shrink-0 text-destructive group-hover:block" />
                   </>
                 ) : (
                   <Check className="h-3.5 w-3.5 shrink-0 opacity-0" />

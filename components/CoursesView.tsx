@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { CURRENT_TERM } from "@/lib/term";
 
 const LEVELS = [
   { value: "lower", label: "Lower-division" },
@@ -102,7 +103,7 @@ function CourseRow({ c, onOpen }: { c: BrowseCourse; onOpen: () => void }) {
     >
       <div className="flex items-baseline justify-between gap-3">
         <p className="min-w-0 truncate">
-          <span className="font-semibold text-foreground">{code}</span>
+          <span className="font-mono font-medium text-foreground">{code}</span>
           {title && <span className="text-muted-foreground"> {title}</span>}
         </p>
         <span className="shrink-0 text-xs text-muted-foreground">
@@ -238,9 +239,9 @@ export default function CoursesView() {
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="shrink-0 border-b bg-background px-4 pb-3 pl-14 pt-5">
         <div className="flex items-center gap-2">
-          <h2 className="shrink-0 text-lg font-semibold text-foreground">Courses</h2>
+          <h2 className="shrink-0 text-lg font-medium text-foreground">Courses</h2>
           <Badge variant="outline" className="shrink-0 border-texas/30 bg-texas/10 font-normal text-texas">
-            Fall 2026
+            {CURRENT_TERM}
           </Badge>
           <Badge variant="secondary" className="shrink-0 font-normal">
             {total.toLocaleString()} {total === 1 ? "course" : "courses"}
@@ -357,7 +358,7 @@ function EmptyState({
   return (
     <div className="mx-auto flex max-w-sm flex-col items-center gap-3 pt-16 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">{icon}</div>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="text-base font-medium">{title}</h3>
       <p className="text-sm text-muted-foreground">{body}</p>
       {action}
     </div>

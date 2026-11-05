@@ -69,6 +69,7 @@ export type Database = {
           name: string
           position: number
           sections: Json
+          term: string
           updated_at: string
           user_id: string
         }
@@ -79,6 +80,7 @@ export type Database = {
           name: string
           position?: number
           sections?: Json
+          term?: string
           updated_at?: string
           user_id?: string
         }
@@ -89,6 +91,7 @@ export type Database = {
           name?: string
           position?: number
           sections?: Json
+          term?: string
           updated_at?: string
           user_id?: string
         }

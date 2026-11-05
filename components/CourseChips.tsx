@@ -56,21 +56,20 @@ import { useIsDesktop } from "@/components/hooks/use-is-desktop";
 
 export type { RetrievedSection, CourseSection } from "@/lib/courses";
 
-// Family colors, shaded darker→lighter across +/ /- so each grade reads distinctly in the bar.
 const GRADE_COLOR: Record<string, string> = {
-  "A+": "bg-emerald-600",
-  A: "bg-emerald-500",
-  "A-": "bg-emerald-400",
-  "B+": "bg-lime-600",
-  B: "bg-lime-500",
-  "B-": "bg-lime-400",
-  "C+": "bg-yellow-600",
-  C: "bg-yellow-500",
-  "C-": "bg-yellow-400",
-  "D+": "bg-orange-600",
-  D: "bg-orange-500",
-  "D-": "bg-orange-400",
-  F: "bg-red-500",
+  "A+": "bg-[#3f9a6b]",
+  A: "bg-[#4fa97a]",
+  "A-": "bg-[#6fba90]",
+  "B+": "bg-[#8fae4f]",
+  B: "bg-[#a2bd63]",
+  "B-": "bg-[#b5c97c]",
+  "C+": "bg-[#c99a35]",
+  C: "bg-[#d6ad55]",
+  "C-": "bg-[#e0c07a]",
+  "D+": "bg-[#c97845]",
+  D: "bg-[#d58c5f]",
+  "D-": "bg-[#dfa17b]",
+  F: "bg-[#c95656]",
   Other: "bg-muted-foreground/40",
 };
 // Breakdown grid: one row per letter family (empty families are skipped).
@@ -95,7 +94,7 @@ export function extractCourses(annotations?: unknown[]): RetrievedSection[] {
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <p className="text-xs font-medium text-muted-foreground">
       {children}
     </p>
   );
@@ -127,7 +126,7 @@ export function GradeBar({
     <div className="space-y-2">
       {gpa != null && (
         <div className="flex items-baseline gap-1.5">
-          <span className="text-lg font-bold tabular-nums text-foreground">
+          <span className="text-lg font-medium tabular-nums text-foreground">
             {gpa.toFixed(2)}
           </span>
           <span className="text-xs text-muted-foreground">
@@ -145,7 +144,7 @@ export function GradeBar({
                   className={GRADE_COLOR[p.b] ?? "bg-muted"}
                   initial={false}
                   animate={{ width: `${p.width}%` }}
-                  transition={{ duration: 0.35, ease: "easeInOut" }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                 />
               </TooltipTrigger>
               <TooltipContent>
@@ -168,7 +167,7 @@ export function GradeBar({
             >
               {cells.map((p) => (
                 <span key={p.b} className="tabular-nums">
-                  <span className="font-semibold text-foreground">{p.b}</span>{" "}
+                  <span className="font-medium text-foreground">{p.b}</span>{" "}
                   {p.pct}%
                 </span>
               ))}
@@ -289,7 +288,7 @@ function Meetings({ sec }: { sec: CourseSection }) {
       {ms.map((m, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
           {m.days && (
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+            <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium">
               {m.days}
             </span>
           )}
@@ -307,9 +306,11 @@ function Meetings({ sec }: { sec: CourseSection }) {
 function SingleSection({
   sec,
   s,
+  addable,
 }: {
   sec: CourseSection;
   s: RetrievedSection;
+  addable: boolean;
 }) {
   const ins = sec.instructors.map(formatName).filter(Boolean);
   return (
@@ -328,7 +329,7 @@ function SingleSection({
           <Meetings sec={sec} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <AddToSchedule section={toScheduleSection(s, sec)} />
+          {addable && <AddToSchedule section={toScheduleSection(s, sec)} />}
           <RegisterLink sec={sec} />
         </div>
       </div>
@@ -340,9 +341,11 @@ function SingleSection({
 function SectionsByProfessor({
   sections,
   s,
+  addable,
 }: {
   sections: CourseSection[];
   s: RetrievedSection;
+  addable: boolean;
 }) {
   const groups = new Map<string, CourseSection[]>();
   for (const sec of sections) {
@@ -386,11 +389,10 @@ function SectionsByProfessor({
               {isOpen && (
                 <motion.div
                   key="content"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeInOut" }}
-                  className="overflow-hidden"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <div className="divide-y border-t">
                     {secs.map((sec) => (
@@ -402,7 +404,9 @@ function SectionsByProfessor({
                           <Meetings sec={sec} />
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <AddToSchedule section={toScheduleSection(s, sec)} />
+                          {addable && (
+                            <AddToSchedule section={toScheduleSection(s, sec)} />
+                          )}
                           <RegisterLink sec={sec} />
                         </div>
                       </div>
@@ -441,8 +445,8 @@ function RmpRow({
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
         {rmp.rmpRating != null && (
           <span className="inline-flex items-center gap-1">
-            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-            <span className="font-semibold text-foreground">
+            <Star className="h-3.5 w-3.5 fill-current text-muted-foreground" />
+            <span className="font-medium text-foreground">
               {rmp.rmpRating.toFixed(1)}
             </span>
             <span className="text-xs text-muted-foreground">/5</span>
@@ -458,8 +462,8 @@ function RmpRow({
             <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
             <span className="text-xs font-medium">In {rmp.rmpCourse.code}</span>
             <span className="inline-flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-              <span className="font-semibold text-foreground">
+              <Star className="h-3.5 w-3.5 fill-current text-muted-foreground" />
+              <span className="font-medium text-foreground">
                 {rmp.rmpCourse.rating.toFixed(1)}
               </span>
               <span className="text-xs text-muted-foreground">/5</span>
@@ -505,9 +509,11 @@ function CourseDescription({ text }: { text: string }) {
 
 function CourseDetail({
   s,
+  addable,
   onOpenRmp,
 }: {
   s: RetrievedSection;
+  addable: boolean;
   onOpenRmp: (prof: RmpPanelProf) => void;
 }) {
   const code = courseCode(s.course_header);
@@ -551,7 +557,7 @@ function CourseDetail({
       <div className="space-y-5">
         <DialogHeader className="space-y-1 text-left">
           {name && (
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               {code}
             </p>
           )}
@@ -586,10 +592,10 @@ function CourseDetail({
         {multi ? (
           <section className="space-y-2">
             <SectionLabel>{`${sections.length} sections`}</SectionLabel>
-            <SectionsByProfessor sections={sections} s={s} />
+            <SectionsByProfessor sections={sections} s={s} addable={addable} />
           </section>
         ) : (
-          <SingleSection sec={sections[0]!} s={s} />
+          <SingleSection sec={sections[0]!} s={s} addable={addable} />
         )}
 
         <CourseGrades
@@ -613,12 +619,12 @@ function CourseDetail({
                     {ev && (ev.courseRating > 0 || ev.instructorRating > 0) && (
                       <div className="flex shrink-0 items-center gap-1.5">
                         {ev.courseRating > 0 && (
-                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium">
                             CES {ev.courseRating}/5
                           </span>
                         )}
                         {ev.instructorRating > 0 && (
-                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium">
                             Prof {ev.instructorRating}/5
                           </span>
                         )}
@@ -706,10 +712,12 @@ function CourseDetailSkeleton() {
 export function CourseDialog({
   section,
   loading = false,
+  addable = true,
   onClose,
 }: {
   section: RetrievedSection | null;
   loading?: boolean;
+  addable?: boolean;
   onClose: () => void;
 }) {
   const [rmpProf, setRmpProf] = useState<RmpPanelProf | null>(null);
@@ -733,11 +741,16 @@ export function CourseDialog({
             className="relative flex items-start gap-3 outline-none ring-0 duration-200 focus:outline-none focus-visible:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
           >
             {/* Course card */}
-            <div className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
+            <motion.div
+              layout
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-background shadow-lg"
+            >
               <div className="max-h-[85vh] overflow-y-auto p-6">
                 {section ? (
                   <CourseDetail
                     s={section}
+                    addable={addable}
                     onOpenRmp={(prof) =>
                       setRmpProf((cur) =>
                         cur?.legacyId === prof.legacyId ? null : prof,
@@ -752,20 +765,19 @@ export function CourseDialog({
                 <X className="h-4 w-4" />
                 <span className="sr-only">Close</span>
               </DialogPrimitive.Close>
-            </div>
+            </motion.div>
 
             {/* Desktop: RMP detail slides out beside the card */}
-            <AnimatePresence>
+            <AnimatePresence mode="popLayout">
               {isDesktop && rmpProf && (
                 <motion.aside
                   key="rmp-panel"
-                  initial={{ opacity: 0, width: 0, x: -12 }}
-                  animate={{ opacity: 1, width: 340, x: 0 }}
-                  exit={{ opacity: 0, width: 0, x: -12 }}
-                  transition={{ duration: 0.28, ease: "easeInOut" }}
-                  className="overflow-hidden"
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
+                  <div className="w-[340px] overflow-hidden rounded-xl border bg-background shadow-lg">
                     <ProfessorRmpPanel
                       prof={rmpProf}
                       onClose={() => setRmpProf(null)}
@@ -824,9 +836,9 @@ export default function CourseChips({
               key={s.section_id}
               type="button"
               onClick={() => setSelected(s)}
-              className="cursor-pointer rounded-full border bg-background px-3 py-1 text-xs transition-colors hover:border-texas/60 hover:text-texas"
+              className="h-8 cursor-pointer rounded-lg border bg-card px-3 text-xs transition-colors hover:bg-foreground/5"
             >
-              <span className="font-medium">{courseCode(s.course_header)}</span>
+              <span className="font-mono font-medium">{courseCode(s.course_header)}</span>
               {label && <span className="text-muted-foreground"> {label}</span>}
             </button>
           );

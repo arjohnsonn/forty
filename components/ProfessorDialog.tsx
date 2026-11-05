@@ -14,10 +14,11 @@ import ProfessorRmpPanel, { type RmpPanelProf } from "@/components/ProfessorRmpP
 import { useIsDesktop } from "@/components/hooks/use-is-desktop";
 import { formatName, courseCode, titleCase, type RetrievedSection } from "@/lib/courses";
 import { fetchCourseDetail, type ProfessorCourse, type ProfessorProfile } from "@/lib/browse";
+import { CURRENT_TERM } from "@/lib/term";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{children}</p>
+    <p className="text-xs font-medium text-muted-foreground">{children}</p>
   );
 }
 
@@ -38,19 +39,19 @@ function RmpSummary({ profile, onOpen }: { profile: ProfessorProfile; onOpen: ()
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
         {profile.rmpRating != null && (
           <span className="inline-flex items-center gap-1">
-            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-            <span className="font-semibold text-foreground">{profile.rmpRating.toFixed(1)}</span>
+            <Star className="h-3.5 w-3.5 fill-current text-muted-foreground" />
+            <span className="font-medium text-foreground">{profile.rmpRating.toFixed(1)}</span>
             <span className="text-xs text-muted-foreground">/5</span>
           </span>
         )}
         {profile.rmpDifficulty != null && (
           <span className="text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{profile.rmpDifficulty.toFixed(1)}</span> difficulty
+            <span className="font-medium text-foreground">{profile.rmpDifficulty.toFixed(1)}</span> difficulty
           </span>
         )}
         {profile.rmpWouldTakeAgain != null && (
           <span className="text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{Math.round(profile.rmpWouldTakeAgain)}%</span> would
+            <span className="font-medium text-foreground">{Math.round(profile.rmpWouldTakeAgain)}%</span> would
             take again
           </span>
         )}
@@ -75,18 +76,18 @@ function CourseCard({ c, onOpen }: { c: ProfessorCourse; onOpen: () => void }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 text-sm">
-          <span className="font-medium">{code}</span>
+          <span className="font-mono font-medium">{code}</span>
           {title && <span className="text-muted-foreground"> {title}</span>}
         </p>
         {(c.courseRating || c.instructorRating) && (
           <div className="flex shrink-0 items-center gap-1.5">
             {!!c.courseRating && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+              <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium">
                 CES {Number(c.courseRating).toFixed(2)}/5
               </span>
             )}
             {!!c.instructorRating && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tracking-wide">
+              <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs font-medium">
                 Prof {Number(c.instructorRating).toFixed(2)}/5
               </span>
             )}
@@ -140,7 +141,7 @@ function ProfileBody({
           </section>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No Fall 2026 courses on record for this instructor.
+            No {CURRENT_TERM} courses on record for this instructor.
           </p>
         )}
       </div>
@@ -245,7 +246,11 @@ export default function ProfessorDialog({
             aria-describedby={undefined}
             className="relative flex items-start gap-3 outline-none ring-0 duration-200 focus:outline-none focus-visible:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
           >
-            <div className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border bg-background shadow-lg">
+            <motion.div
+              layout
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="relative w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-background shadow-lg"
+            >
               <div className="max-h-[85vh] overflow-y-auto p-6">
                 {profile ? (
                   <ProfileBody
@@ -261,19 +266,18 @@ export default function ProfessorDialog({
                 <X className="h-4 w-4" />
                 <span className="sr-only">Close</span>
               </DialogPrimitive.Close>
-            </div>
+            </motion.div>
 
-            <AnimatePresence>
+            <AnimatePresence mode="popLayout">
               {isDesktop && rmpOpen && rmpProf && (
                 <motion.aside
                   key="rmp-panel"
-                  initial={{ opacity: 0, width: 0, x: -12 }}
-                  animate={{ opacity: 1, width: 340, x: 0 }}
-                  exit={{ opacity: 0, width: 0, x: -12 }}
-                  transition={{ duration: 0.28, ease: "easeInOut" }}
-                  className="overflow-hidden"
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -12 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <div className="w-[340px] overflow-hidden rounded-lg border bg-background shadow-lg">
+                  <div className="w-[340px] overflow-hidden rounded-xl border bg-background shadow-lg">
                     <ProfessorRmpPanel prof={rmpProf} onClose={() => setRmpOpen(false)} />
                   </div>
                 </motion.aside>

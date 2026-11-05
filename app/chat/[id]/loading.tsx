@@ -11,7 +11,7 @@ export default function ChatLoading() {
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-6 pt-2">
           <div className="flex justify-end">
-            <Skeleton className="h-9 w-2/5 rounded-3xl" />
+            <Skeleton className="h-9 w-2/5 rounded-2xl" />
           </div>
           <div className="space-y-2.5">
             <Skeleton className="h-4 w-full" />
@@ -28,7 +28,7 @@ export default function ChatLoading() {
 
       <div className="shrink-0">
         <div className="mx-auto w-full max-w-3xl px-4 pb-3 pt-2">
-          <Skeleton className="h-12 w-full rounded-3xl" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
         </div>
       </div>
     </div>

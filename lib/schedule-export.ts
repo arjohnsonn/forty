@@ -8,9 +8,11 @@ import {
   type ScheduleSection,
   type TimeBlock,
 } from "@/lib/courses";
+import { firstFullWeek } from "@/lib/term";
 
 export type ExportSchedule = {
   name: string;
+  term: string;
   sections: ScheduleSection[];
   blocks: TimeBlock[];
 };
@@ -83,8 +85,7 @@ const escapeIcs = (v: string) =>
   v.replace(/[\\;,]/g, (c) => "\\" + c).replace(/\n/g, "\\n");
 
 export function exportIcs(s: ExportSchedule) {
-  // Anchor recurring events to the Monday of a representative Fall 2026 week; floating local time.
-  const base = new Date(2026, 7, 31);
+  const base = firstFullWeek(s.term);
   base.setDate(base.getDate() - ((base.getDay() + 6) % 7));
   const dateFor = (dayIdx: number) => {
     const d = new Date(base);

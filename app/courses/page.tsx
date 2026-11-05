@@ -8,7 +8,7 @@ export default async function CoursesPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return redirect("/sign-in");
+  if (!user) return redirect("/");
 
   return <CoursesView />;
 }

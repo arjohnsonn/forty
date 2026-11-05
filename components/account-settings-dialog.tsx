@@ -124,8 +124,8 @@ export function AccountSettingsDialog({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>AI Credits</Label>
-              <span className="text-lg font-semibold text-texas">
+              <Label>Credits</Label>
+              <span className="font-mono text-lg tabular-nums">
                 ${balance.toFixed(2)}
               </span>
             </div>
@@ -186,8 +186,8 @@ export function AccountSettingsDialog({
             </div>
           </div>
 
-          <div className="space-y-2 border-t border-foreground/10 pt-4">
-            <Label className="text-lg text-destructive">Danger Zone</Label>
+          <div className="space-y-2 border-t pt-4">
+            <Label>Delete account</Label>
             <p className="text-sm text-muted-foreground">
               Permanently delete your account and all of your chats and
               schedules. This can&apos;t be undone.

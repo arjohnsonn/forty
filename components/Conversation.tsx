@@ -227,7 +227,7 @@ const Conversation: React.FC<ConversationProps> = ({
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10">
         <div className="flex items-center justify-between gap-2 bg-background pb-4 pl-14 pr-3 pt-5">
-          <h2 className="truncate text-lg font-semibold text-foreground">
+          <h2 className="truncate text-lg font-medium text-foreground">
             {displayTitle}
           </h2>
           <DropdownMenu>
@@ -246,7 +246,7 @@ const Conversation: React.FC<ConversationProps> = ({
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setConfirmingDelete(true)}
-                className="text-red-500 focus:bg-red-500/10 focus:text-red-500"
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete
@@ -270,7 +270,7 @@ const Conversation: React.FC<ConversationProps> = ({
               if (message.role === "user") {
                 return (
                   <div key={message.id} className="flex justify-end">
-                    <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-3xl bg-muted px-4 py-2.5 text-sm">
+                    <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-sm">
                       {text}
                     </div>
                   </div>
@@ -290,7 +290,7 @@ const Conversation: React.FC<ConversationProps> = ({
             })}
 
             {awaitingText && (
-              <div className="flex items-center gap-2 text-sm font-medium">
+              <div className="flex items-center gap-2 text-sm">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 <span className="shimmer-text">Thinking…</span>
               </div>
@@ -303,7 +303,7 @@ const Conversation: React.FC<ConversationProps> = ({
       <div className="shrink-0 bg-background">
         <div className="mx-auto w-full max-w-3xl px-4 pb-3 pt-2">
           <form onSubmit={onSubmit}>
-            <div className="flex items-end gap-2 rounded-3xl border bg-background py-1.5 pl-4 pr-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring">
+            <div className="flex items-end gap-2 rounded-2xl border bg-card py-1.5 pl-4 pr-1.5 transition-colors focus-within:ring-1 focus-within:ring-ring">
               <TextareaExpand
                 ref={textareaRef}
                 rows={1}
@@ -316,28 +316,29 @@ const Conversation: React.FC<ConversationProps> = ({
                     onSubmit(e as unknown as React.FormEvent);
                   }
                 }}
-                placeholder="Message Forty…"
+                placeholder="Message Forty"
               />
               <AgenticToggle
                 agentic={agentic}
                 onToggle={() => setAgentic(!agentic)}
               />
               <Button
-                className="h-9 w-9 shrink-0 rounded-full border-transparent bg-texas p-0 hover:bg-texas/90 disabled:opacity-50"
+                aria-label="Send"
+                className="h-9 w-9 shrink-0 rounded-[10px] border-transparent bg-texas p-0 hover:bg-texas/90 disabled:opacity-50"
                 variant="outline"
                 type="submit"
                 disabled={busy || !input.trim()}
               >
                 {busy ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
                 ) : (
-                  <ArrowUp className="h-5 w-5 text-white" />
+                  <ArrowUp className="h-4 w-4 text-white" />
                 )}
               </Button>
             </div>
           </form>
           <p className="mt-2 text-center text-xs text-muted-foreground">
-            Forty can make mistakes. Verify important details.
+            Forty can make mistakes. Check important details on the UT course schedule.
           </p>
         </div>
       </div>
@@ -429,7 +430,7 @@ function AssistantMessage({
 
   return (
     <div className="space-y-2">
-      <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted">
+      <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-medium prose-strong:font-semibold prose-p:leading-relaxed prose-pre:bg-muted">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={rehypePlugins}

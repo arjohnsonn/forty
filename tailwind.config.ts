@@ -55,17 +55,14 @@ const config = {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
   			},
-  			texas: {
-  				'500': 'rgb(191 87 0 / <alpha-value>)',
-  				DEFAULT: 'rgb(191 87 0 / <alpha-value>)'
-  			},
-  			chart: {
-  				'1': 'hsl(var(--chart-1))',
-  				'2': 'hsl(var(--chart-2))',
-  				'3': 'hsl(var(--chart-3))',
-  				'4': 'hsl(var(--chart-4))',
-  				'5': 'hsl(var(--chart-5))'
-  			}
+  			texas: 'rgb(var(--texas) / <alpha-value>)'
+  		},
+  		transitionTimingFunction: {
+  			DEFAULT: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  			out: 'cubic-bezier(0.22, 1, 0.36, 1)'
+  		},
+  		fontFamily: {
+  			mono: ['var(--font-mono)', 'ui-monospace', 'monospace']
   		},
   		borderRadius: {
   			lg: 'var(--radius)',

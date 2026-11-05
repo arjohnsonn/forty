@@ -25,6 +25,6 @@
     // gemini-2.5-flash token rates ($/1M) + retail markup for debiting credits. Keep CREDIT_MARKUP synced with lib/credits.ts.
     "GEMINI_INPUT_USD_PER_1M": "0.3",
     "GEMINI_OUTPUT_USD_PER_1M": "2.5",
-    "CREDIT_MARKUP": "4",
+    "CREDIT_MARKUP": "1.4",
   },
 }

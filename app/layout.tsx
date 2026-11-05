@@ -1,4 +1,4 @@
-import { Poppins } from "next/font/google";
+import { Geist_Mono, Poppins } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { SchedulesProvider } from "@/lib/schedules";
 import ClientErrorGuard from "@/components/client-error-guard";
 import { CreditsToast } from "@/components/credits-toast";
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/next";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -17,12 +17,18 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Forty",
-  description: "Find your perfect UT schedule with AI",
+  description:
+    "Plan your UT Austin schedule with grade distributions, RateMyProfessors reviews and the live course schedule",
 };
 
 const poppinSans = Poppins({
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
 });
 
 export default async function RootLayout({
@@ -39,7 +45,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${poppinSans.className} bg-background`}
+      className={`${poppinSans.className} ${geistMono.variable} bg-background`}
       suppressHydrationWarning
     >
       <body
@@ -76,7 +82,7 @@ export default async function RootLayout({
               marginTop: user ? 0 : "4rem",
               marginLeft: "var(--sidebar-width, 0px)",
             }}
-            className={`flex flex-col bg-background transition-all duration-300 ${
+            className={`flex flex-col bg-background ${
               user ? "h-svh" : "h-[calc(100svh-4rem)]"
             }`}
           >

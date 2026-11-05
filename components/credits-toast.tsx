@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/hooks/use-toast";
 
-// After Checkout redirects to /?credits=1, toast + refresh so the new balance shows.
 export function CreditsToast() {
   const router = useRouter();
   const { toast } = useToast();
@@ -17,8 +16,8 @@ export function CreditsToast() {
     setTimeout(
       () =>
         toast({
-          title: "🎉 Credits added!",
-          description: "Thanks for supporting Forty. Happy planning!",
+          title: "Credits added",
+          description: "Thanks for supporting Forty. Your balance updates in a moment.",
         }),
       50,
     );

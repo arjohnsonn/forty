@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
 import { createCheckoutSession } from "@/app/actions";
 import { useToast } from "@/components/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -52,12 +51,10 @@ export function TopUpDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-texas" /> Add AI Credits
-          </DialogTitle>
+          <DialogTitle>Add credits</DialogTitle>
           <DialogDescription>
-            Pay what you want and your credits never expire. Use them to build,
-            compare, and plan your schedule with AI.
+            Pay what you want and your credits never expire. Use them to ask
+            about courses and build schedules.
           </DialogDescription>
         </DialogHeader>
 
@@ -68,13 +65,13 @@ export function TopUpDialog({
               type="button"
               onClick={() => setAmount(String(p))}
               className={cn(
-                "flex flex-col items-center gap-0.5 rounded-md border py-3 transition-colors",
+                "flex flex-col items-center gap-0.5 rounded-lg border py-3 transition-colors",
                 dollars === p
                   ? "border-texas bg-texas/10 text-texas"
                   : "border-input text-muted-foreground hover:bg-foreground/5",
               )}
             >
-              <span className="text-base font-semibold">${p}</span>
+              <span className="font-mono text-base font-medium tabular-nums">${p}</span>
               <span className="text-xs">≈{estMessages(p)} msgs</span>
             </button>
           ))}

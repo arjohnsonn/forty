@@ -11,10 +11,12 @@ import { createClient } from "@/utils/supabase/client";
 import { useToast } from "@/components/hooks/use-toast";
 import type { Json } from "@/types/database";
 import { pickColorIndex, type ScheduleSection, type TimeBlock } from "@/lib/courses";
+import { CURRENT_TERM, isCurrentTerm } from "@/lib/term";
 
 export type ScheduleRow = {
   id: string;
   name: string;
+  term: string;
   sections: ScheduleSection[];
   blocks: TimeBlock[];
   created_at: string;
@@ -57,11 +59,12 @@ const SchedulesContext = createContext<SchedulesContextValue>({
 
 export const useSchedules = () => useContext(SchedulesContext);
 
-const SELECT = "id, name, sections, blocks, created_at, updated_at";
+const SELECT = "id, name, term, sections, blocks, created_at, updated_at";
 
 function parseRow(row: {
   id: string;
   name: string;
+  term: string;
   sections: Json;
   blocks: Json;
   created_at: string;
@@ -70,6 +73,7 @@ function parseRow(row: {
   return {
     id: row.id,
     name: row.name,
+    term: row.term,
     sections: Array.isArray(row.sections) ? (row.sections as unknown as ScheduleSection[]) : [],
     blocks: Array.isArray(row.blocks) ? (row.blocks as unknown as TimeBlock[]) : [],
     created_at: row.created_at,
@@ -114,7 +118,7 @@ export function SchedulesProvider({ children }: { children: React.ReactNode }) {
     async (name: string) => {
       const { data, error } = await supabase
         .from("schedules")
-        .insert({ name, position: schedules.length })
+        .insert({ name, term: CURRENT_TERM, position: schedules.length })
         .select(SELECT)
         .single();
       if (error || !data) {
@@ -171,7 +175,16 @@ export function SchedulesProvider({ children }: { children: React.ReactNode }) {
   const addSection = useCallback(
     async (scheduleId: string, section: ScheduleSection) => {
       // Assign a (random, dedup-preferring) color per add so the same course can differ per schedule.
-      const existing = schedules.find((s) => s.id === scheduleId)?.sections ?? [];
+      const target = schedules.find((s) => s.id === scheduleId);
+      if (target && !isCurrentTerm(target.term)) {
+        toast({
+          variant: "destructive",
+          title: `${target.name} is a ${target.term} schedule`,
+          description: `Create a new schedule for ${CURRENT_TERM} courses.`,
+        });
+        return;
+      }
+      const existing = target?.sections ?? [];
       const colored: ScheduleSection =
         section.color != null ? section : { ...section, color: pickColorIndex(existing) };
       setSchedules((prev) =>

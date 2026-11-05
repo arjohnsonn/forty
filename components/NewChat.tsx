@@ -37,14 +37,14 @@ export default function NewChat() {
     };
   }, []);
 
-  const handleStart = async (_greeting: string, query: string) => {
+  const handleStart = async (query: string) => {
     // getSession reads the local session (no network), so this stays instant.
     const {
       data: { session },
     } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) {
-      router.push("/sign-in");
+      router.push("/");
       return;
     }
 

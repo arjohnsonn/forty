@@ -48,6 +48,7 @@ type BlockInstance = { block: TimeBlock; dayIdx: number };
 
 export default function WeeklyGrid({
   sections,
+  live,
   timeBlocks,
   onRemove,
   onRemoveBlock,
@@ -56,6 +57,7 @@ export default function WeeklyGrid({
   onRequestEdit,
 }: {
   sections: ScheduleSection[];
+  live: boolean;
   timeBlocks: TimeBlock[];
   onRemove: (sectionId: number) => void;
   onRemoveBlock: (blockId: string) => void;
@@ -106,6 +108,7 @@ export default function WeeklyGrid({
   const openCourse = async (s: ScheduleSection) => {
     // Show the snapshot, then fetch THIS section's course by section_id (shared numbers like UGS 303 span many topics).
     setSelected(s.detail ?? scheduleSectionToRetrieved(s));
+    if (!live) return;
     openSection.current = s.section_id;
     const full = await fetchCourseBySection(supabase, s.section_id);
     if (full && openSection.current === s.section_id) setSelected(full);
@@ -315,7 +318,7 @@ export default function WeeklyGrid({
                 {hours.map((h, i) => (
                   <div
                     key={h}
-                    className="absolute right-1.5 -translate-y-1/2 text-[10px] text-muted-foreground"
+                    className="absolute right-1.5 -translate-y-1/2 text-[11px] text-muted-foreground"
                     style={{ top: i * HOUR_PX }}
                   >
                     {i === 0 ? "" : minuteLabel((h % 24) * 60)}
@@ -345,7 +348,7 @@ export default function WeeklyGrid({
                       it.preview ? (
                         <div
                           key={`preview-${it.block.id}`}
-                          className="pointer-events-none absolute overflow-hidden rounded-md border border-texas/50 bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground ring-2 ring-texas/50"
+                          className="pointer-events-none absolute overflow-hidden rounded-md border border-texas/50 bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground ring-2 ring-texas/50"
                           style={{
                             top: (it.startMin / 60) * HOUR_PX + 1,
                             height: Math.max(((it.endMin - it.startMin) / 60) * HOUR_PX - 2, 14),
@@ -362,7 +365,7 @@ export default function WeeklyGrid({
                         <div
                           key={`${it.block.id}-${d}`}
                           onPointerDown={(e) => startMove(e, it.block, d)}
-                          className="group/blk absolute cursor-grab overflow-hidden rounded-md border border-dashed border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground active:cursor-grabbing"
+                          className="group/blk absolute cursor-grab overflow-hidden rounded-md border border-dashed border-muted-foreground/30 bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground active:cursor-grabbing"
                           style={{
                             top: (it.startMin / 60) * HOUR_PX + 1,
                             height: Math.max(((it.endMin - it.startMin) / 60) * HOUR_PX - 2, 14),
@@ -416,7 +419,7 @@ export default function WeeklyGrid({
                     {/* Drag-to-create preview */}
                     {preview && preview.dayIdx === d && preview.endMin > preview.startMin && (
                       <div
-                        className="pointer-events-none absolute inset-x-0.5 overflow-hidden rounded-md border border-texas/50 bg-texas/20 px-1.5 py-0.5 text-[10px] text-texas"
+                        className="pointer-events-none absolute inset-x-0.5 overflow-hidden rounded-md border border-texas/50 bg-texas/20 px-1.5 py-0.5 text-[11px] text-texas"
                         style={{
                           top: (preview.startMin / 60) * HOUR_PX + 1,
                           height: Math.max(((preview.endMin - preview.startMin) / 60) * HOUR_PX - 2, 14),
@@ -444,7 +447,7 @@ export default function WeeklyGrid({
                           "group absolute cursor-pointer overflow-hidden rounded-md px-1.5 py-1 text-left text-[11px] leading-tight outline-none focus-visible:ring-2 focus-visible:ring-texas/40",
                           b.color.bg,
                           b.color.text,
-                          b.conflict && "ring-2 ring-red-500"
+                          b.conflict && "ring-2 ring-destructive"
                         )}
                         style={{
                           top: ((b.startMin) / 60) * HOUR_PX + 1,
@@ -466,7 +469,7 @@ export default function WeeklyGrid({
                         >
                           <X className="h-3 w-3" />
                         </button>
-                        <div className="truncate font-semibold">
+                        <div className="truncate font-mono font-medium">
                           {b.code}
                           {b.source.instructors?.[0]
                             ? ` - ${lastName(b.source.instructors[0])}`
@@ -488,7 +491,7 @@ export default function WeeklyGrid({
 
       {noMeeting.length > 0 && (
         <div className="shrink-0 rounded-lg border p-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
             No set meeting time
           </p>
           <div className="flex flex-wrap gap-2">
@@ -512,7 +515,7 @@ export default function WeeklyGrid({
                     color.text
                   )}
                 >
-                  <span className="font-medium">{s.course_code}</span>
+                  <span className="font-mono font-medium">{s.course_code}</span>
                   {s.instruction_mode && <span className="opacity-70">{s.instruction_mode}</span>}
                   <button
                     type="button"
@@ -533,7 +536,7 @@ export default function WeeklyGrid({
         </div>
       )}
 
-      <CourseDialog section={selected} onClose={closeDialog} />
+      <CourseDialog section={selected} addable={live} onClose={closeDialog} />
     </div>
   );
 }

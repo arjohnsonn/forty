@@ -157,7 +157,7 @@ function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
             {hours.map((h, i) => (
               <div
                 key={h}
-                className="absolute right-1.5 -translate-y-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                className="absolute right-1.5 -translate-y-1/2 whitespace-nowrap text-[11px] text-muted-foreground"
                 style={{ top: i * HOUR_PX }}
               >
                 {i === 0 ? "" : minuteLabel(h * 60)}
@@ -214,7 +214,7 @@ function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
                         }}
                         title={`${b.code}${b.prof ? ` - ${b.prof}` : ""} - ${minuteLabel(b.startMin)}–${minuteLabel(b.endMin)}${b.location ? ` - ${b.location}` : ""}`}
                       >
-                        <div className="truncate font-semibold">
+                        <div className="truncate font-mono font-medium">
                           {b.code}
                           {b.prof ? ` - ${b.prof}` : ""}
                         </div>
@@ -250,7 +250,7 @@ function MiniWeeklyGrid({ sections }: { sections: ScheduleSection[] }) {
 function Pill({ label, value }: { label: string; value: string }) {
   return (
     <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[11px] text-muted-foreground">
-      <span className="font-semibold">{label}:</span> {value}
+      <span className="font-medium">{label}:</span> {value}
     </span>
   );
 }
@@ -319,14 +319,14 @@ function ScheduleCard({
   return (
     <div className="rounded-lg border bg-background p-3">
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <span className="mr-0.5 text-xs font-semibold">Option {index + 1}</span>
+        <span className="mr-0.5 text-xs font-medium">Option {index + 1}</span>
         {option.gpa != null && (
           <Pill label="GPA" value={option.gpa.toFixed(2)} />
         )}
         {option.quality > 0 && (
           <Pill label="Prof" value={`${(option.quality * 5).toFixed(1)}/5`} />
         )}
-        <Pill label="Days Off" value={off} />
+        <Pill label="Days off" value={off} />
         <Pill label="Gap" value={gaps} />
       </div>
 

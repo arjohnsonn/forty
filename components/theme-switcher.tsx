@@ -16,13 +16,12 @@ const ThemeSwitcher = () => {
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
 
-  // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    return null;
+    return <span aria-hidden className="inline-block h-9 w-9" />;
   }
 
   const ICON_SIZE = 16;
@@ -30,7 +29,7 @@ const ThemeSwitcher = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size={"sm"}>
+        <Button variant="ghost" size="sm" aria-label="Theme" className="w-9 px-0">
           {theme === "light" ? (
             <Sun
               key="light"

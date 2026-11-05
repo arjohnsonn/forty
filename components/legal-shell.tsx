@@ -18,11 +18,11 @@ export function LegalShell({
         >
           <ArrowLeft className="h-4 w-4" /> Back to {COMPANY}
         </Link>
-        <h1 className="text-3xl font-semibold">{title}</h1>
+        <h1 className="text-3xl font-medium">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Last updated: {LEGAL_UPDATED}
         </p>
-        <div className="prose prose-sm mt-8 max-w-none dark:prose-invert">
+        <div className="prose prose-sm mt-8 max-w-none dark:prose-invert prose-headings:font-medium">
           {children}
         </div>
       </div>

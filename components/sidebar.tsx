@@ -10,7 +10,7 @@ import {
   CalendarDays,
   GraduationCap,
   SquarePen,
-  Wand2,
+  CalendarPlus,
   Menu,
   Sheet,
   School,
@@ -23,7 +23,6 @@ import {
   MoreHorizontal,
   LogOut,
   Settings,
-  Sparkles,
   FileText,
   ShieldCheck,
   Receipt,
@@ -54,6 +53,7 @@ import { AccountSettingsDialog } from "@/components/account-settings-dialog";
 import { TopUpDialog } from "@/components/topup-dialog";
 import { useToast } from "@/components/hooks/use-toast";
 import { signOutAction } from "@/app/actions";
+import { CURRENT_TERM_CODE } from "@/lib/term";
 
 type Conversation = { id: string; title: string };
 
@@ -78,10 +78,10 @@ const SidebarItem = ({
     href={href}
     onClick={onClick}
     className={cn(
-      "flex items-center gap-3 rounded-lg px-4 py-2 transition-colors duration-150 ease-in-out",
+      "flex h-9 items-center gap-2.5 rounded-lg px-3 text-sm transition-colors duration-150",
       active
         ? "bg-texas/10 text-texas"
-        : "text-zinc-600 hover:bg-foreground/10 hover:text-foreground dark:text-zinc-400",
+        : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
     )}
     title={text}
     target={target}
@@ -98,13 +98,13 @@ const Section = ({
   title?: string;
   children: React.ReactNode;
 }) => (
-  <div className="mb-4">
+  <div className="mb-6 last:mb-0">
     {title && (
-      <h3 className="mb-1 whitespace-nowrap px-3 text-xs font-medium uppercase text-zinc-500 dark:text-neutral-400">
+      <h3 className="mb-2 whitespace-nowrap px-3 text-xs text-muted-foreground">
         {title}
       </h3>
     )}
-    <div className="space-y-1">{children}</div>
+    <div className="space-y-0.5">{children}</div>
   </div>
 );
 
@@ -261,13 +261,13 @@ export function Sidebar({
       {!isMobile && (
         <button
           onClick={() => setCollapsed(!collapsed)}
-          style={{ left: collapsed ? 8 : "calc(var(--sidebar-width) + 6px)" }}
-          className="fixed top-5 z-[100] flex h-8 w-8 items-center justify-center rounded-r-md text-foreground transition-all duration-300 ease-in-out hover:text-zinc-400 active:text-zinc-500"
+          style={{ transform: collapsed ? undefined : "translateX(calc(15rem - 2px))" }}
+          className="fixed left-2 top-4 z-[100] flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-[color,transform] duration-300 hover:text-foreground"
         >
           {!collapsed ? (
-            <PanelRightOpen className="h-6 w-6" />
+            <PanelRightOpen className="h-5 w-5" />
           ) : (
-            <PanelRightClose className="h-6 w-6" />
+            <PanelRightClose className="h-5 w-5" />
           )}
         </button>
       )}
@@ -275,7 +275,7 @@ export function Sidebar({
       {isMobile && (
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="fixed left-4 top-4 z-[100] rounded-md p-2 text-foreground transition-colors duration-150 ease-in-out hover:text-zinc-400 active:text-zinc-500"
+          className="fixed left-4 top-4 z-[100] rounded-lg p-2 text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -283,17 +283,15 @@ export function Sidebar({
 
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-background text-foreground transition-all duration-300",
-          collapsed ? "w-0 overflow-hidden" : "w-60",
-          !collapsed && "border-r border-foreground/10",
-          isMobile && !mobileOpen && "-translate-x-full transform",
-          isMobile && mobileOpen && "translate-x-0 transform shadow-lg",
+          "fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-background text-foreground transition-[transform,visibility] duration-300",
+          ((!isMobile && collapsed) || (isMobile && !mobileOpen)) && "invisible -translate-x-full",
+          isMobile && mobileOpen && "shadow-lg",
         )}
       >
         <Link
           href="/"
           onClick={() => window.dispatchEvent(new Event("forty:new-chat"))}
-          className="flex items-center justify-center border-b border-b-foreground/10 p-4 pt-5 transition-colors hover:text-zinc-400"
+          className="flex h-16 shrink-0 items-center justify-center border-b px-4 transition-colors hover:text-muted-foreground"
           title="New chat"
         >
           <Image
@@ -304,9 +302,9 @@ export function Sidebar({
             className="flex-shrink-0"
             priority
           />
-          <h1 className="ml-2 overflow-hidden text-ellipsis whitespace-nowrap font-semibold">
+          <span className="ml-2 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
             Forty
-          </h1>
+          </span>
         </Link>
 
         <div className="flex-1 overflow-y-auto p-2">
@@ -322,8 +320,8 @@ export function Sidebar({
             />
             <SidebarItem
               href="/build"
-              icon={<Wand2 className="h-4 w-4" />}
-              text="Build a Schedule"
+              icon={<CalendarPlus className="h-4 w-4" />}
+              text="Build a schedule"
               active={pathname === "/build"}
             />
             <SidebarItem
@@ -348,7 +346,7 @@ export function Sidebar({
 
           <Section title="Recents">
             {conversations.length === 0 ? (
-              <p className="px-4 py-1 text-sm text-zinc-500">No chats yet</p>
+              <p className="px-3 py-2 text-sm text-muted-foreground">No chats yet</p>
             ) : (
               conversations.map((c) => {
                 const active = pathname === `/chat/${c.id}`;
@@ -359,17 +357,17 @@ export function Sidebar({
                       "group relative rounded-lg transition-colors duration-150",
                       active
                         ? "bg-texas/10 text-texas"
-                        : "hover:bg-foreground/10",
+                        : "hover:bg-foreground/5",
                     )}
                   >
                     <Link
                       href={`/chat/${c.id}`}
                       title={c.title}
                       className={cn(
-                        "block truncate rounded-lg py-2 pl-4 pr-10 text-sm transition-colors duration-150",
+                        "flex h-9 items-center truncate rounded-lg pl-3 pr-10 text-sm transition-colors duration-150",
                         active
                           ? "text-foreground"
-                          : "text-zinc-600 group-hover:text-foreground dark:text-zinc-400",
+                          : "text-muted-foreground group-hover:text-foreground",
                       )}
                     >
                       {c.title}
@@ -379,7 +377,7 @@ export function Sidebar({
                         <DropdownMenuTrigger
                           title="Chat options"
                           aria-label="Chat options"
-                          className="rounded p-1 text-zinc-400 opacity-0 transition-opacity hover:bg-foreground/20 hover:text-foreground focus:outline-none group-hover:opacity-100 data-[state=open]:opacity-100"
+                          className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-foreground/10 hover:text-foreground focus:outline-none group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
@@ -395,7 +393,7 @@ export function Sidebar({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeleteTarget(c)}
-                            className="text-red-500 focus:bg-red-500/10 focus:text-red-500"
+                            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
@@ -411,15 +409,15 @@ export function Sidebar({
 
           <Section title="Resources">
             <SidebarItem
-              href="https://utdirect.utexas.edu/apps/registrar/course_schedule/20269/"
+              href={`https://utdirect.utexas.edu/apps/registrar/course_schedule/${CURRENT_TERM_CODE}/`}
               icon={<Calendar className="h-4 w-4" />}
-              text="Course Schedule"
+              text="Course schedule"
               target="_blank"
             />
             <SidebarItem
               href="https://utdirect.utexas.edu/apps/degree/audits/"
               icon={<GraduationCap className="h-4 w-4" />}
-              text="Degree Audit"
+              text="Degree audit"
               target="_blank"
             />
             <SidebarItem
@@ -431,33 +429,31 @@ export function Sidebar({
             <SidebarItem
               href="https://utdirect.utexas.edu/registration/chooseSemester.WBX"
               icon={<School className="h-4 w-4" />}
-              text="Class Registration"
+              text="Class registration"
               target="_blank"
             />
           </Section>
         </div>
 
-        <div className="mx-2 mb-1 space-y-1 rounded-lg border border-foreground/10 px-3 py-2.5">
+        <div className="mx-2 mb-2 space-y-2 rounded-xl border p-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 shrink-0" /> Credits
-            </span>
-            <span className="font-medium text-foreground">
+            <span className="text-muted-foreground">Credits</span>
+            <span className="font-mono tabular-nums text-foreground">
               {balance === null ? "—" : `$${balance.toFixed(2)}`}
             </span>
           </div>
           <button
             onClick={() => setTopUpOpen(true)}
-            className="w-full rounded-md border border-texas/40 py-1.5 text-xs font-medium text-texas transition-colors hover:bg-texas/10"
+            className="h-8 w-full rounded-lg border text-xs font-medium transition-colors hover:bg-foreground/5"
           >
             Add credits
           </button>
         </div>
 
-        <div className="flex items-center gap-1 border-t border-foreground/10 p-2">
+        <div className="flex items-center gap-1 border-t p-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex flex-1 items-center gap-2 overflow-hidden rounded-lg p-2 text-left transition-colors hover:bg-foreground/10">
+              <button className="flex flex-1 items-center gap-2 overflow-hidden rounded-lg p-2 text-left transition-colors hover:bg-foreground/5">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
@@ -475,7 +471,7 @@ export function Sidebar({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => signOutAction()}>
                 <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
+                Sign out
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -504,7 +500,7 @@ export function Sidebar({
 
       {isMobile && mobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black bg-opacity-50 transition-opacity duration-300"
+          className="fixed inset-0 z-30 bg-black/50"
           onClick={() => setMobileOpen(false)}
         />
       )}

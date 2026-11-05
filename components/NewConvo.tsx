@@ -20,21 +20,14 @@ import {
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   type LucideIcon,
-  Wand2,
+  CalendarPlus,
   TrendingUp,
   Users,
   Star,
   ArrowUp,
   X,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-
-const randomGreetings = [
-  "Ready to plan your *semester schedule?*",
-  "Let’s craft your *perfect semester schedule*",
-  "Need help designing your *class lineup?*",
-  "How can I help make your *schedule better?*",
-];
+import { useState, useRef } from "react";
 
 // Each starter opens a dialog that collects its fields, then `compose()` builds the prompt
 // from the entered values (which is dropped into the input - not sent automatically).
@@ -50,9 +43,8 @@ type StarterField = {
 };
 type Starter = {
   label: string; // button label under the input (kept as-is)
-  title: string; // dialog title (Title Case)
+  title: string;
   icon: LucideIcon;
-  iconProps: { className: string };
   fields: StarterField[];
   required: string[]; // field keys that must be filled to enable Insert
   compose: (v: Record<string, string>) => string;
@@ -63,10 +55,9 @@ const clean = (s: string | undefined) => (s ?? "").trim().replace(/,\s*$/, "");
 
 const starterButtonsConfig: Starter[] = [
   {
-    label: "Build my Schedule",
-    title: "Build My Schedule",
-    icon: Wand2,
-    iconProps: { className: "w-5 h-5 text-texas" },
+    label: "Build my schedule",
+    title: "Build my schedule",
+    icon: CalendarPlus,
     required: ["classes"],
     agentic: true,
     fields: [
@@ -138,9 +129,8 @@ const starterButtonsConfig: Starter[] = [
   },
   {
     label: "Find easy A's",
-    title: "Find Easy A's",
+    title: "Find easy A's",
     icon: TrendingUp,
-    iconProps: { className: "w-5 h-5 text-green-500" },
     required: ["subject"],
     fields: [
       {
@@ -155,9 +145,8 @@ const starterButtonsConfig: Starter[] = [
   },
   {
     label: "Best professor",
-    title: "Best Professor",
+    title: "Best professor",
     icon: Star,
-    iconProps: { className: "w-5 h-5 text-yellow-500" },
     required: ["class"],
     fields: [
       { key: "class", label: "Class", type: "course", placeholder: "C S 314" },
@@ -167,9 +156,8 @@ const starterButtonsConfig: Starter[] = [
   },
   {
     label: "Compare professors",
-    title: "Compare Professors",
+    title: "Compare professors",
     icon: Users,
-    iconProps: { className: "w-5 h-5 text-sky-500" },
     required: ["target"],
     fields: [
       {
@@ -199,26 +187,17 @@ const starterButtonsConfig: Starter[] = [
 ];
 
 type Props = {
-  onSubmit: (greeting: string, query: string) => void;
+  onSubmit: (query: string) => void;
 };
 
 const NewConvo = ({ onSubmit }: Props) => {
   const { agentic, setAgentic } = useAgentic();
-  // Deterministic seed so text shows on first paint; randomized after mount.
-  const [greeting, setGreeting] = useState(randomGreetings[0]);
-  const [parts, setParts] = useState<string[]>(randomGreetings[0].split("*"));
   const [activeStarter, setActiveStarter] = useState<Starter | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   // Set when Insert is clicked; consumed in the dialog's onCloseAutoFocus so the prompt is
   // written into the input after the focus trap releases (otherwise the trap steals focus).
   const pendingInsert = useRef<string | null>(null);
 
-  useEffect(() => {
-    const gr =
-      randomGreetings[Math.floor(Math.random() * randomGreetings.length)];
-    setGreeting(gr);
-    setParts(gr.split("*"));
-  }, []);
 
   const allFilled = !!activeStarter?.required.every((k) =>
     fieldValues[k]?.trim(),
@@ -235,19 +214,11 @@ const NewConvo = ({ onSubmit }: Props) => {
   return (
     <div className="flex-1 w-full flex items-center justify-center">
       <div className="flex w-full flex-col items-center justify-center gap-y-3 px-4">
-        <h1 className="text-2xl text-center sm:text-3xl">
-          {parts.map((text, idx) =>
-            idx % 2 === 1 ? (
-              <span className="text-texas font-semibold" key={idx}>
-                {text}
-              </span>
-            ) : (
-              text
-            ),
-          )}
+        <h1 className="text-center text-2xl font-medium sm:text-3xl">
+          Ask about any UT course or professor
         </h1>
 
-        <div className="flex w-full max-w-2xl items-end gap-2 rounded-3xl border py-1.5 pl-4 pr-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring">
+        <div className="flex w-full max-w-2xl items-end gap-2 rounded-2xl border bg-card py-1.5 pl-4 pr-1.5 transition-colors focus-within:ring-1 focus-within:ring-ring">
           <TextareaExpand
             rows={1}
             className="max-h-60 min-h-0 flex-1 resize-none self-center overflow-y-auto border-0 bg-transparent px-0 py-2 focus-visible:ring-0"
@@ -257,7 +228,7 @@ const NewConvo = ({ onSubmit }: Props) => {
                 const textarea = e.currentTarget as HTMLTextAreaElement;
                 const query = textarea.value.trim();
                 if (!query) return;
-                onSubmit(greeting, query);
+                onSubmit(query);
                 textarea.value = "";
                 textarea.dispatchEvent(new Event("input", { bubbles: true }));
               }
@@ -271,7 +242,8 @@ const NewConvo = ({ onSubmit }: Props) => {
             onToggle={() => setAgentic(!agentic)}
           />
           <Button
-            className="h-9 w-9 shrink-0 rounded-full border-transparent bg-texas p-0 transition-colors hover:bg-texas/90 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Send"
+            className="h-9 w-9 shrink-0 rounded-[10px] border-transparent bg-texas p-0 hover:bg-texas/90 disabled:cursor-not-allowed disabled:opacity-50"
             variant="outline"
             onClick={() => {
               const textarea = document.querySelector(
@@ -279,12 +251,12 @@ const NewConvo = ({ onSubmit }: Props) => {
               ) as HTMLTextAreaElement | null;
               if (!textarea || !textarea.value.trim()) return;
               const query = textarea.value.trim();
-              onSubmit(greeting, query);
+              onSubmit(query);
               textarea.value = "";
               textarea.dispatchEvent(new Event("input", { bubbles: true }));
             }}
           >
-            <ArrowUp className="h-5 w-5 text-white" />
+            <ArrowUp className="h-4 w-4 text-white" />
           </Button>
         </div>
 
@@ -292,7 +264,7 @@ const NewConvo = ({ onSubmit }: Props) => {
           {starterButtonsConfig.map((btn, idx) => (
             <Button
               key={idx}
-              className="rounded-xl h-10 flex items-center justify-center gap-2 px-3"
+              className="flex h-9 items-center justify-center gap-2 px-3 text-muted-foreground hover:text-foreground"
               variant="outline"
               onClick={() => {
                 setFieldValues(
@@ -303,7 +275,7 @@ const NewConvo = ({ onSubmit }: Props) => {
                 setActiveStarter(btn);
               }}
             >
-              <btn.icon {...btn.iconProps} />
+              <btn.icon className="h-4 w-4" />
               <span>{btn.label}</span>
             </Button>
           ))}
@@ -339,9 +311,9 @@ const NewConvo = ({ onSubmit }: Props) => {
             >
               <DialogTitle className="flex items-center gap-2">
                 {activeStarter && (
-                  <activeStarter.icon {...activeStarter.iconProps} />
+                  <activeStarter.icon className="h-4 w-4 text-muted-foreground" />
                 )}
-                {activeStarter?.title ?? "Quick Start"}
+                {activeStarter?.title ?? "Quick start"}
               </DialogTitle>
               <DialogPrimitive.Close className="absolute right-4 top-4 cursor-pointer rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
                 <X className="h-4 w-4" />

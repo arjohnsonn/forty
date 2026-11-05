@@ -7,9 +7,9 @@ import {
   Plus,
   X,
   Loader2,
-  Sparkles,
   ChevronDown,
   CalendarDays,
+  CalendarPlus,
   SlidersHorizontal,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
@@ -67,6 +67,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { CourseDialog } from "@/components/CourseChips";
 import { cn } from "@/lib/utils";
+import { CURRENT_TERM, isCurrentTerm } from "@/lib/term";
 
 type Desired = {
   course: BrowseCourse;
@@ -81,7 +82,6 @@ const GRID_START = 8 * 60; // 8 AM
 const GRID_END = 21 * 60; // 9 PM
 // Hour ticks for the mini-grid time axis: 9, 12, 3, 6 (24h: 9/12/15/18).
 const MINI_MARKS = [9, 12, 15, 18];
-const shortHour = (h: number) => `${h % 12 || 12}`;
 
 // Days to render: always Mon–Fri, extended through the latest weekday any class meets.
 const visibleDays = (...dayLists: number[][]): number[] => {
@@ -122,7 +122,7 @@ type SortCat = {
 const SORT_CATS: SortCat[] = [
   {
     id: "best",
-    label: "Professor Rating",
+    label: "Professor rating",
     rank: "best",
     descLabel: "Best first",
     ascLabel: "Worst first",
@@ -136,21 +136,21 @@ const SORT_CATS: SortCat[] = [
   },
   {
     id: "daysoff",
-    label: "Days Off",
+    label: "Days off",
     rank: "daysoff",
-    descLabel: "Most Days Off",
-    ascLabel: "Fewest Days Off",
+    descLabel: "Most days off",
+    ascLabel: "Fewest days off",
   },
   {
     id: "compact",
     label: "Gaps",
     rank: "compact",
-    descLabel: "Fewest Gaps",
-    ascLabel: "Most Gaps",
+    descLabel: "Fewest gaps",
+    ascLabel: "Most gaps",
   },
   {
     id: "earliest",
-    label: "Start Time",
+    label: "Start time",
     rank: "earliest",
     descLabel: "Latest",
     ascLabel: "Earliest",
@@ -374,26 +374,10 @@ function MiniGrid({
 
   return (
     <div>
-      {/* Time gutter is the first cell of the SAME grid row as the day cells, so labels and the per-cell hour lines share one height/top - they line up with no cross-container offset. */}
       <div
         className="grid h-28 gap-0.5"
-        style={{ gridTemplateColumns: `1.25rem ${gridCols(cols.length)}` }}
+        style={{ gridTemplateColumns: gridCols(cols.length) }}
       >
-        <div className="relative">
-          {MINI_MARKS.map((h) => (
-            <span
-              key={h}
-              className="absolute right-1 text-[7px] leading-none text-muted-foreground/70"
-              style={{
-                top: `${markPct(h)}%`,
-                // center on the mark, plus a hair down to offset the font's high-sitting glyphs
-                transform: "translateY(calc(-50% + 0.5px))",
-              }}
-            >
-              {shortHour(h)}
-            </span>
-          ))}
-        </div>
         {cols.map((d) => (
           <div key={d} className="relative overflow-hidden rounded bg-muted/40">
             {MINI_MARKS.map((h) => (
@@ -409,11 +393,9 @@ function MiniGrid({
                 <div
                   key={`f${i}`}
                   title={`${c.code} - ${minuteLabel(c.startMin)}–${minuteLabel(c.endMin)}`}
-                  className="absolute inset-x-0.5 flex items-center justify-center overflow-hidden rounded-sm border border-dashed border-muted-foreground/40 bg-muted px-0.5 text-[8px] font-medium leading-none text-muted-foreground"
+                  className="absolute inset-x-0.5 rounded-sm border border-dashed border-muted-foreground/40 bg-muted"
                   style={{ top: `${c.top}%`, height: `${c.height}%` }}
-                >
-                  <span className="truncate">{c.code}</span>
-                </div>
+                />
               ))}
             {cells
               .filter((c) => c.day === d)
@@ -424,30 +406,26 @@ function MiniGrid({
                     key={i}
                     title={`${c.code} - ${minuteLabel(c.startMin)}–${minuteLabel(c.endMin)}`}
                     className={cn(
-                      "absolute inset-x-0.5 flex items-center justify-center overflow-hidden rounded-sm px-0.5 text-[8px] font-semibold leading-none",
+                      "absolute inset-x-0.5 rounded-sm",
                       col.bg,
-                      col.text,
                     )}
                     style={{ top: `${c.top}%`, height: `${c.height}%` }}
-                  >
-                    <span className="truncate">{c.code}</span>
-                  </div>
+                  />
                 );
               })}
           </div>
         ))}
       </div>
       <div
-        className="mt-1 grid gap-0.5 text-center text-[9px] text-muted-foreground"
-        style={{ gridTemplateColumns: `1.25rem ${gridCols(cols.length)}` }}
+        className="mt-1 grid gap-0.5 text-center text-[11px] text-muted-foreground"
+        style={{ gridTemplateColumns: gridCols(cols.length) }}
       >
-        <div />
         {cols.map((d) => (
           <div key={d}>{DAY_LABELS[d]}</div>
         ))}
       </div>
       {online > 0 && (
-        <p className="mt-1 text-[10px] text-muted-foreground">
+        <p className="mt-1 text-[11px] text-muted-foreground">
           +{online} online/async
         </p>
       )}
@@ -559,7 +537,7 @@ function PreviewGrid({
           {hours.map((h, i) => (
             <div
               key={h}
-              className="absolute right-1.5 -translate-y-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+              className="absolute right-1.5 -translate-y-1/2 whitespace-nowrap text-[11px] text-muted-foreground"
               style={{ top: i * HOUR_PX }}
             >
               {i === 0 ? "" : minuteLabel(h * 60)}
@@ -612,7 +590,7 @@ function PreviewGrid({
                       ),
                     }}
                   >
-                    <div className="truncate font-semibold">
+                    <div className="truncate font-mono font-medium">
                       {b.code}
                       {b.prof ? ` - ${b.prof}` : ""}
                     </div>
@@ -674,19 +652,19 @@ function ResultCard({
       <MiniGrid sched={sched} fixed={fixed} />
       <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
         <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
-          <span className="font-semibold">Prof:</span>{" "}
+          <span className="font-medium">Prof:</span>{" "}
           {(sched.quality * 5).toFixed(1)}/5
         </span>
         {sched.gpa != null && (
           <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
-            <span className="font-semibold">GPA:</span> {sched.gpa.toFixed(2)}
+            <span className="font-medium">GPA:</span> {sched.gpa.toFixed(2)}
           </span>
         )}
         <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
-          <span className="font-semibold">Off:</span> {off}
+          <span className="font-medium">Off:</span> {off}
         </span>
         <span className="whitespace-nowrap rounded-full border px-1.5 py-0.5">
-          <span className="font-semibold">Gap:</span> {gaps}
+          <span className="font-medium">Gap:</span> {gaps}
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -742,7 +720,13 @@ function ResultCard({
 export default function BuildView() {
   const router = useRouter();
   const { toast } = useToast();
-  const { schedules, createSchedule, addSection, setActiveId } = useSchedules();
+  const {
+    schedules: allSchedules,
+    createSchedule,
+    addSection,
+    setActiveId,
+  } = useSchedules();
+  const schedules = allSchedules.filter((s) => isCurrentTerm(s.term));
   const [supabase] = useState(() => createClient());
 
   const [query, setQuery] = useState("");
@@ -1059,14 +1043,14 @@ export default function BuildView() {
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="shrink-0 border-b bg-background px-4 pb-3 pl-14 pt-5">
         <div className="flex items-center gap-2">
-          <h2 className="shrink-0 text-lg font-semibold text-foreground">
-            Build a Schedule
+          <h2 className="shrink-0 text-lg font-medium text-foreground">
+            Build a schedule
           </h2>
           <Badge
             variant="outline"
             className="shrink-0 border-texas/30 bg-texas/10 font-normal text-texas"
           >
-            Fall 2026
+            {CURRENT_TERM}
           </Badge>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -1159,7 +1143,7 @@ export default function BuildView() {
                       <button
                         type="button"
                         onClick={() => deletePreset(p.id)}
-                        className="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
+                        className="shrink-0 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         aria-label={`Delete preset ${p.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1214,7 +1198,7 @@ export default function BuildView() {
                     >
                       <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 truncate">
-                        <span className="font-semibold">{code}</span>
+                        <span className="font-mono font-medium">{code}</span>
                         {title && (
                           <span className="text-muted-foreground">
                             {" "}
@@ -1245,12 +1229,12 @@ export default function BuildView() {
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
                       d.error
-                        ? "border-red-500/40 bg-red-500/10 text-red-500"
+                        ? "border-destructive/40 bg-destructive/10 text-destructive"
                         : "bg-muted",
                     )}
                   >
                     {d.loading && <Loader2 className="h-3 w-3 animate-spin" />}
-                    <span className="font-medium">{code}</span>
+                    <span className="font-mono font-medium">{code}</span>
                     {d.error && <span>- failed</span>}
                     <button
                       type="button"
@@ -1311,7 +1295,7 @@ export default function BuildView() {
                 <SlidersHorizontal className="h-3.5 w-3.5 opacity-70" />
                 Filters
                 {activeFilters > 0 && (
-                  <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-texas px-1 text-[10px] font-semibold text-white">
+                  <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-texas px-1 text-[11px] font-medium text-white">
                     {activeFilters}
                   </span>
                 )}
@@ -1326,8 +1310,7 @@ export default function BuildView() {
               onClick={onGenerate}
               disabled={!ready}
             >
-              <Sparkles className="mr-2 h-4 w-4" />
-              {ready ? "Generate Schedules" : "Loading courses…"}
+              {ready ? "Generate schedules" : "Loading courses…"}
             </Button>
           )}
 
@@ -1393,10 +1376,10 @@ export default function BuildView() {
           {/* Empty state */}
           {desired.length === 0 && (
             <div className="mx-auto flex max-w-sm flex-1 flex-col items-center justify-center gap-2 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-                <Sparkles className="h-7 w-7 text-muted-foreground" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border">
+                <CalendarPlus className="h-5 w-5 text-muted-foreground" />
               </div>
-              <h3 className="text-base font-semibold">
+              <h3 className="text-base font-medium">
                 Start with your courses
               </h3>
               <p className="text-sm text-muted-foreground">
@@ -1539,17 +1522,17 @@ export default function BuildView() {
             <>
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
                 <span className="whitespace-nowrap rounded-full border px-2 py-0.5">
-                  <span className="font-semibold">Avg Prof:</span>{" "}
+                  <span className="font-medium">Avg prof:</span>{" "}
                   {(preview.sched.quality * 5).toFixed(1)}/5
                 </span>
                 <span className="whitespace-nowrap rounded-full border px-2 py-0.5">
-                  <span className="font-semibold">Days Off:</span>{" "}
+                  <span className="font-medium">Days off:</span>{" "}
                   {preview.sched.daysOff.length
                     ? preview.sched.daysOff.map((d) => DAY_LABELS[d]).join(" ")
                     : "None"}
                 </span>
                 <span className="whitespace-nowrap rounded-full border px-2 py-0.5">
-                  <span className="font-semibold">Gaps:</span>{" "}
+                  <span className="font-medium">Gaps:</span>{" "}
                   {preview.sched.gapMinutes >= 60
                     ? `${(preview.sched.gapMinutes / 60).toFixed(1).replace(/\.0$/, "")}h/week`
                     : `${preview.sched.gapMinutes}m/week`}

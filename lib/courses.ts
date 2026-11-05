@@ -175,14 +175,14 @@ export function minuteLabel(min: number): string {
 
 // Fixed palette so the same course is always the same color across chips, blocks, and schedules.
 const COURSE_COLORS = [
-  { bg: "bg-blue-500/40", border: "border-blue-500/50", text: "text-blue-700 dark:text-blue-300", dot: "bg-blue-500" },
-  { bg: "bg-emerald-500/40", border: "border-emerald-500/50", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
-  { bg: "bg-violet-500/40", border: "border-violet-500/50", text: "text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
-  { bg: "bg-amber-500/40", border: "border-amber-500/50", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
-  { bg: "bg-pink-500/40", border: "border-pink-500/50", text: "text-pink-700 dark:text-pink-300", dot: "bg-pink-500" },
-  { bg: "bg-cyan-500/40", border: "border-cyan-500/50", text: "text-cyan-700 dark:text-cyan-300", dot: "bg-cyan-500" },
-  { bg: "bg-orange-500/40", border: "border-orange-500/50", text: "text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
-  { bg: "bg-teal-500/40", border: "border-teal-500/50", text: "text-teal-700 dark:text-teal-300", dot: "bg-teal-500" },
+  { bg: "bg-[#5b8bd9]/30 dark:bg-[#5b8bd9]/40", border: "border-[#5b8bd9]/50", text: "text-[#2d5aa8] dark:text-[#a9c4f0]", dot: "bg-[#5b8bd9]" },
+  { bg: "bg-[#4fa97a]/30 dark:bg-[#4fa97a]/40", border: "border-[#4fa97a]/50", text: "text-[#2a7350] dark:text-[#9fd9b9]", dot: "bg-[#4fa97a]" },
+  { bg: "bg-[#8c7fd1]/30 dark:bg-[#8c7fd1]/40", border: "border-[#8c7fd1]/50", text: "text-[#5a4ca3] dark:text-[#c3baf0]", dot: "bg-[#8c7fd1]" },
+  { bg: "bg-[#d1a03a]/30 dark:bg-[#d1a03a]/40", border: "border-[#d1a03a]/50", text: "text-[#7d5a12] dark:text-[#ecd08f]", dot: "bg-[#d1a03a]" },
+  { bg: "bg-[#cf6f86]/30 dark:bg-[#cf6f86]/40", border: "border-[#cf6f86]/50", text: "text-[#9c3d55] dark:text-[#eeb2c0]", dot: "bg-[#cf6f86]" },
+  { bg: "bg-[#4aa7c9]/30 dark:bg-[#4aa7c9]/40", border: "border-[#4aa7c9]/50", text: "text-[#1f6a88] dark:text-[#9dd3e6]", dot: "bg-[#4aa7c9]" },
+  { bg: "bg-[#9aa04a]/30 dark:bg-[#9aa04a]/40", border: "border-[#9aa04a]/50", text: "text-[#5c6124] dark:text-[#cfd394]", dot: "bg-[#9aa04a]" },
+  { bg: "bg-[#3fa59b]/30 dark:bg-[#3fa59b]/40", border: "border-[#3fa59b]/50", text: "text-[#1f6e66] dark:text-[#93d4cc]", dot: "bg-[#3fa59b]" },
 ] as const;
 
 export type CourseColor = (typeof COURSE_COLORS)[number];
@@ -208,10 +208,10 @@ export function pickColorIndex(existing: { color?: number | null }[]): number {
   return pool[Math.floor(Math.random() * pool.length)]!;
 }
 
-// Hex palettes (Tailwind 500/300/700) parallel to COURSE_COLORS, for canvas rendering (PNG export).
-const COURSE_HEX = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f97316", "#14b8a6"];
-const COURSE_HEX_300 = ["#93c5fd", "#6ee7b7", "#c4b5fd", "#fcd34d", "#f9a8d4", "#67e8f9", "#fdba74", "#5eead4"];
-const COURSE_HEX_700 = ["#1d4ed8", "#047857", "#6d28d9", "#b45309", "#be185d", "#0e7490", "#c2410c", "#0f766e"];
+// Hex base/light/dark shades parallel to COURSE_COLORS, for canvas rendering (PNG export).
+const COURSE_HEX = ["#5b8bd9", "#4fa97a", "#8c7fd1", "#d1a03a", "#cf6f86", "#4aa7c9", "#9aa04a", "#3fa59b"];
+const COURSE_HEX_300 = ["#a9c4f0", "#9fd9b9", "#c3baf0", "#ecd08f", "#eeb2c0", "#9dd3e6", "#cfd394", "#93d4cc"];
+const COURSE_HEX_700 = ["#2d5aa8", "#2a7350", "#5a4ca3", "#7d5a12", "#9c3d55", "#1f6a88", "#5c6124", "#1f6e66"];
 
 // A saved section's palette index (matches courseColor/colorAt).
 export function colorIndexFor(s: { color?: number | null; course_code: string }): number {

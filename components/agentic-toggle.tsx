@@ -26,24 +26,24 @@ export function AgenticToggle({
             variant="outline"
             onClick={onToggle}
             aria-pressed={agentic}
+            aria-label="Schedule builder"
             className={cn(
-              "h-9 w-9 shrink-0 self-center rounded-full border p-0 transition-colors",
+              "h-9 w-9 shrink-0 self-center rounded-[10px] border p-0",
               agentic
                 ? "border-transparent bg-foreground text-background hover:bg-foreground/90"
                 : "border-input text-muted-foreground hover:bg-foreground/5",
             )}
           >
-            <CalendarCog className="h-5 w-5" />
+            <CalendarCog className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-[230px]">
           <p className="font-medium">
-            Agentic scheduling: {agentic ? "On" : "Off"}
+            Schedule builder: {agentic ? "on" : "off"}
           </p>
           <p className="opacity-80">
-            Lets Forty build &amp; compare full schedules. It costs slightly more AI
-            credits, so it&apos;s off by default - turn it on when you want a
-            schedule built.
+            Lets Forty build and compare full weekly schedules. It uses a few
+            more credits, so it starts off.
           </p>
         </TooltipContent>
       </Tooltip>

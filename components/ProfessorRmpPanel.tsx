@@ -36,47 +36,31 @@ type RmpDetail = {
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{children}</p>;
+  return <p className="text-xs font-medium text-muted-foreground">{children}</p>;
 }
 
-// RMP-style: green→red by quality, gray-scaled by difficulty. Dark text sits on the pastel fill.
-function qualityColor(v: number | null): string {
-  if (v == null) return "bg-muted";
-  if (v >= 4) return "bg-emerald-300";
-  if (v >= 3) return "bg-lime-300";
-  if (v >= 2) return "bg-amber-300";
-  return "bg-red-300";
-}
-function difficultyColor(v: number | null): string {
-  if (v == null) return "bg-muted";
-  if (v >= 4) return "bg-zinc-500";
-  if (v >= 3) return "bg-zinc-400";
-  if (v >= 2) return "bg-zinc-300";
-  return "bg-zinc-200";
-}
-
-// Letter-grade chip color (A green → F red); anything non-letter stays neutral.
-function gradeColor(grade: string): string {
-  const g = grade.trim().toUpperCase()[0];
-  if (g === "A") return "bg-emerald-300 text-zinc-900";
-  if (g === "B") return "bg-lime-300 text-zinc-900";
-  if (g === "C") return "bg-amber-300 text-zinc-900";
-  if (g === "D") return "bg-orange-300 text-zinc-900";
-  if (g === "F") return "bg-red-300 text-zinc-900";
-  return "bg-muted text-foreground";
+function qualityDot(v: number | null): string | null {
+  if (v == null) return null;
+  if (v >= 4) return "bg-emerald-500";
+  if (v >= 3) return "bg-amber-500";
+  return "bg-red-500";
 }
 
 function MetaLabel({ children }: { children: React.ReactNode }) {
   return <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{children}</span>;
 }
 
-function RmpBox({ label, value, bg }: { label: string; value: string; bg: string }) {
+function RmpFigure({ label, value, dot }: { label: string; value: number | null; dot?: string | null }) {
   return (
-    <div className="text-center">
-      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <div className={`flex items-center justify-center rounded-md py-4 ${bg}`}>
-        <span className="text-3xl font-extrabold text-zinc-900">{value}</span>
-      </div>
+    <div className="rounded-xl border p-3">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {dot && <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />}
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-medium leading-none tabular-nums">
+        {value != null ? value.toFixed(1) : "N/A"}
+        {value != null && <span className="ml-1 text-sm text-muted-foreground">/ 5</span>}
+      </p>
     </div>
   );
 }
@@ -100,10 +84,10 @@ function Distribution({ d }: { d: NonNullable<RmpDetail["distribution"]> }) {
     <div className="space-y-1.5">
       {rows.map((r) => (
         <div key={r.star} className="flex items-center gap-2 text-xs">
-          <span className="w-3 text-muted-foreground">{r.star}</span>
-          <Star className="h-3 w-3 shrink-0 fill-yellow-400 text-yellow-400" />
+          <span className="w-3 font-mono tabular-nums text-muted-foreground">{r.star}</span>
+          <Star className="h-3 w-3 shrink-0 text-muted-foreground" />
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-yellow-400/80" style={{ width: `${(r.count / max) * 100}%` }} />
+            <div className="h-full rounded-full bg-foreground/40" style={{ width: `${(r.count / max) * 100}%` }} />
           </div>
           <span className="w-6 text-right tabular-nums text-muted-foreground">{r.count}</span>
         </div>
@@ -128,18 +112,20 @@ function ReviewCard({ r }: { r: Review }) {
     <div className="space-y-2 rounded-lg border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {r.course && <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-semibold">{r.course}</span>}
+          {r.course && <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium">{r.course}</span>}
           {r.grade && (
-            <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${gradeColor(r.grade)}`}>{r.grade}</span>
+            <MetaLabel>
+              <span className="font-medium text-foreground">Grade</span> {r.grade}
+            </MetaLabel>
           )}
           {r.quality > 0 && (
             <MetaLabel>
-              <span className="font-semibold text-foreground">Quality</span> {r.quality.toFixed(1)}/5
+              <span className="font-medium text-foreground">Quality</span> {r.quality.toFixed(1)}/5
             </MetaLabel>
           )}
           {r.difficulty != null && (
             <MetaLabel>
-              <span className="font-semibold text-foreground">Difficulty</span> {r.difficulty}/5
+              <span className="font-medium text-foreground">Difficulty</span> {r.difficulty}/5
             </MetaLabel>
           )}
         </div>
@@ -149,7 +135,7 @@ function ReviewCard({ r }: { r: Review }) {
       {r.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 pt-0.5">
           {r.tags.map((t) => (
-            <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
               {t}
             </span>
           ))}
@@ -221,7 +207,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
     <div className="flex max-h-[85vh] flex-col">
       <header className="flex shrink-0 items-start justify-between gap-2 border-b p-4">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold leading-tight">{data?.name ?? prof.name}</p>
+          <p className="truncate text-sm font-medium leading-tight">{data?.name ?? prof.name}</p>
           {(data?.department ?? prof.department) && (
             <p className="truncate text-xs text-muted-foreground">{data?.department ?? prof.department}</p>
           )}
@@ -231,7 +217,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
             href={`https://www.ratemyprofessors.com/professor/${prof.legacyId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
             aria-label="Open on RateMyProfessors"
           >
             <ExternalLink className="h-4 w-4" />
@@ -239,7 +225,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -256,25 +242,17 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
           <>
             <section className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <RmpBox
-                  label="Quality"
-                  value={data.overall.rating?.toFixed(1) ?? "N/A"}
-                  bg={qualityColor(data.overall.rating)}
-                />
-                <RmpBox
-                  label="Difficulty"
-                  value={data.overall.difficulty?.toFixed(1) ?? "N/A"}
-                  bg={difficultyColor(data.overall.difficulty)}
-                />
+                <RmpFigure label="Quality" value={data.overall.rating} dot={qualityDot(data.overall.rating)} />
+                <RmpFigure label="Difficulty" value={data.overall.difficulty} />
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {data.overall.wouldTakeAgain != null && (
                   <MetaLabel>
-                    <span className="font-semibold text-foreground">{data.overall.wouldTakeAgain}%</span> would take again
+                    <span className="font-medium text-foreground">{data.overall.wouldTakeAgain}%</span> would take again
                   </MetaLabel>
                 )}
                 <MetaLabel>
-                  <span className="font-semibold text-foreground">{data.overall.numRatings}</span> ratings
+                  <span className="font-medium text-foreground">{data.overall.numRatings}</span> ratings
                 </MetaLabel>
               </div>
             </section>
@@ -290,7 +268,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
               <section className="space-y-2">
                 <SectionLabel>By course</SectionLabel>
                 <div className="overflow-hidden rounded-lg border">
-                  <div className="grid grid-cols-[1fr_3.5rem_3.5rem] gap-x-4 bg-muted/50 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="grid grid-cols-[1fr_3.5rem_3.5rem] gap-x-4 bg-muted/50 px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
                     <span>Course</span>
                     <span className="text-right">Rating</span>
                     <span className="text-right">Diff.</span>
@@ -298,7 +276,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
                   <div className="divide-y">
                     {data.courses.map((c) => (
                       <div key={c.code} className="grid grid-cols-[1fr_3.5rem_3.5rem] items-center gap-x-4 px-3 py-1.5 text-sm">
-                        <span className="truncate font-medium">
+                        <span className="truncate font-mono font-medium">
                           {c.code}
                           <span className="ml-1.5 text-xs font-normal text-muted-foreground">{c.numRatings}</span>
                         </span>
@@ -316,7 +294,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
                 <SectionLabel>Top tags</SectionLabel>
                 <div className="flex flex-wrap gap-1.5">
                   {data.tags.map((t) => (
-                    <span key={t.tag} className="rounded-full bg-muted px-2.5 py-1 text-xs">
+                    <span key={t.tag} className="rounded-md bg-muted px-2 py-1 text-xs">
                       {t.tag} <span className="text-muted-foreground">{t.count}</span>
                     </span>
                   ))}
@@ -352,7 +330,7 @@ export default function ProfessorRmpPanel({ prof, onClose }: { prof: RmpPanelPro
                 <ReviewList
                   reviews={course === "all" ? data.reviews : courseReviews ?? []}
                   loading={course !== "all" && reviewsLoading}
-                  emptyLabel={course === "all" ? "No reviews yet." : `No reviews for ${course}.`}
+                  emptyLabel={course === "all" ? "No reviews yet" : `No reviews for ${course}`}
                 />
               </section>
             )}

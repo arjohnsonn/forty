@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CURRENT_TERM } from "@/lib/term";
 
 function ProfessorRow({ p, onOpen }: { p: ProfessorListItem; onOpen: () => void }) {
   return (
@@ -33,8 +34,8 @@ function ProfessorRow({ p, onOpen }: { p: ProfessorListItem; onOpen: () => void 
       <div className="shrink-0 text-right">
         {p.rmpRating != null ? (
           <div className="flex items-center gap-1.5">
-            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-semibold">{p.rmpRating.toFixed(1)}</span>
+            <Star className="h-3.5 w-3.5 fill-current text-muted-foreground" />
+            <span className="text-sm font-medium">{p.rmpRating.toFixed(1)}</span>
             <span className="text-xs text-muted-foreground">/5</span>
             {p.rmpNumRatings != null && (
               <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
@@ -143,9 +144,9 @@ export default function ProfessorsView() {
     <div className="relative flex min-h-0 w-full flex-1 flex-col">
       <div className="shrink-0 border-b bg-background px-4 pb-3 pl-14 pt-5">
         <div className="flex items-center gap-2">
-          <h2 className="shrink-0 text-lg font-semibold text-foreground">Professors</h2>
+          <h2 className="shrink-0 text-lg font-medium text-foreground">Professors</h2>
           <Badge variant="outline" className="shrink-0 border-texas/30 bg-texas/10 font-normal text-texas">
-            Fall 2026
+            {CURRENT_TERM}
           </Badge>
           <Badge variant="secondary" className="shrink-0 font-normal">
             {total.toLocaleString()} {total === 1 ? "professor" : "professors"}
@@ -227,7 +228,7 @@ function EmptyState({
   return (
     <div className="mx-auto flex max-w-sm flex-col items-center gap-3 pt-16 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">{icon}</div>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="text-base font-medium">{title}</h3>
       <p className="text-sm text-muted-foreground">{body}</p>
       {action}
     </div>

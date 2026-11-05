@@ -19,6 +19,7 @@ import WeeklyGrid from "@/components/WeeklyGrid";
 import TimePicker from "@/components/TimePicker";
 import { courseMeta } from "@/lib/courses";
 import { exportPng, exportIcs, exportJson, exportTxt } from "@/lib/schedule-export";
+import { isCurrentTerm } from "@/lib/term";
 
 type BlockDraft = { id?: string; label: string; days: number[]; startMin: number; endMin: number };
 
@@ -167,9 +168,14 @@ export default function CalendarView() {
       <div className="shrink-0 border-b bg-background px-4 pb-3 pl-14 pt-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <h2 className="shrink-0 text-lg font-semibold text-foreground">Calendar</h2>
+            <h2 className="shrink-0 text-lg font-medium text-foreground">Calendar</h2>
             {active && (
               <>
+                {!isCurrentTerm(active.term) && (
+                  <Badge variant="outline" className="shrink-0 font-normal">
+                    {active.term}
+                  </Badge>
+                )}
                 <Badge variant="secondary" className="shrink-0 font-normal">
                   {active.sections.length} {active.sections.length === 1 ? "course" : "courses"}
                 </Badge>
@@ -196,7 +202,7 @@ export default function CalendarView() {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => setDeleteTarget(active)}
-                      className="text-red-500 focus:bg-red-500/10 focus:text-red-500"
+                      className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
@@ -270,6 +276,7 @@ export default function CalendarView() {
                 )}
               >
                 {s.name}
+                {!isCurrentTerm(s.term) && <span className="ml-1 opacity-60">· {s.term}</span>}
               </button>
             ))}
           </div>
@@ -295,6 +302,7 @@ export default function CalendarView() {
           ) : (
             <WeeklyGrid
               sections={active.sections}
+              live={isCurrentTerm(active.term)}
               timeBlocks={active.blocks}
               onRemove={(sectionId) => removeSection(active.id, sectionId)}
               onRemoveBlock={(blockId) => removeBlock(active.id, blockId)}
@@ -319,7 +327,7 @@ export default function CalendarView() {
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>New Schedule</DialogTitle>
+            <DialogTitle>New schedule</DialogTitle>
           </DialogHeader>
           <Input
             autoFocus
@@ -460,7 +468,7 @@ function EmptyState({
   return (
     <div className="mx-auto flex max-w-sm flex-col items-center gap-3 pt-16 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">{icon}</div>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="text-base font-medium">{title}</h3>
       <p className="text-sm text-muted-foreground">{body}</p>
       {action}
     </div>
