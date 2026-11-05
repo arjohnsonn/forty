@@ -59,6 +59,14 @@ const SchedulesContext = createContext<SchedulesContextValue>({
 
 export const useSchedules = () => useContext(SchedulesContext);
 
+// The current-term schedule that adds and conflict checks target; shares `activeId` with the calendar.
+export function useTargetSchedule() {
+  const { schedules, activeId, setActiveId } = useSchedules();
+  const current = schedules.filter((s) => isCurrentTerm(s.term));
+  const target = current.find((s) => s.id === activeId) ?? current[0] ?? null;
+  return { current, target, setTarget: setActiveId };
+}
+
 const SELECT = "id, name, term, sections, blocks, created_at, updated_at";
 
 function parseRow(row: {

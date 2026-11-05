@@ -51,7 +51,7 @@ import {
   type SemesterGrades,
   type ProfessorRating,
 } from "@/lib/courses";
-import AddToSchedule from "@/components/AddToSchedule";
+import AddToSchedule, { ScheduleTargetPicker } from "@/components/AddToSchedule";
 import { useIsDesktop } from "@/components/hooks/use-is-desktop";
 
 export type { RetrievedSection, CourseSection } from "@/lib/courses";
@@ -588,6 +588,8 @@ function CourseDetail({
         )}
 
         {s.description && <CourseDescription text={s.description} />}
+
+        {addable && <ScheduleTargetPicker />}
 
         {multi ? (
           <section className="space-y-2">

@@ -1,42 +1,67 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Check, X, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { useToast } from "@/components/hooks/use-toast";
-import { useSchedules, type ScheduleRow } from "@/lib/schedules";
+import { useSchedules, useTargetSchedule, type ScheduleRow } from "@/lib/schedules";
 import {
   sectionBlockConflicts,
   sectionCourseConflicts,
   type ScheduleSection,
 } from "@/lib/courses";
 import { cn } from "@/lib/utils";
-import { isCurrentTerm } from "@/lib/term";
 
-/** Courses + time blocks in `s` that this section would overlap. */
 const conflictsIn = (section: ScheduleSection, s: ScheduleRow): string[] => [
   ...sectionCourseConflicts(section, s.sections),
   ...sectionBlockConflicts(section, s.blocks),
 ];
 
-// (+) to add `section` to a schedule; auto-adds (0/1) or shows a picker, warns on overlap, offers undo.
+// Which schedule the (+) buttons add to and check conflicts against.
+export function ScheduleTargetPicker({ className }: { className?: string }) {
+  const { createSchedule } = useSchedules();
+  const { current, target, setTarget } = useTargetSchedule();
+
+  const createNew = async () => {
+    const created = await createSchedule(`Schedule ${current.length + 1}`);
+    if (created) setTarget(created.id);
+  };
+
+  return (
+    <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", className)}>
+      <span>Adding to</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex h-7 items-center gap-1.5 rounded-lg border px-2.5 font-medium text-foreground transition-colors hover:bg-muted">
+          {target ? target.name : "New schedule"}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72">
+          {current.map((s) => (
+            <DropdownMenuItem key={s.id} onClick={() => setTarget(s.id)} className="gap-2">
+              <Check className={cn("h-3.5 w-3.5 shrink-0", s.id !== target?.id && "opacity-0")} />
+              <span className="truncate">{s.name}</span>
+            </DropdownMenuItem>
+          ))}
+          {current.length > 0 && <DropdownMenuSeparator />}
+          <DropdownMenuItem onClick={createNew} className="gap-2">
+            <Plus className="h-3.5 w-3.5 shrink-0" />
+            New schedule
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {target && <span>· conflicting sections are disabled</span>}
+    </div>
+  );
+}
+
+// (+) adds `section` to the target schedule; disabled when it overlaps a class or time block there.
 export default function AddToSchedule({
   section,
   className,
@@ -44,41 +69,37 @@ export default function AddToSchedule({
   section: ScheduleSection;
   className?: string;
 }) {
-  const {
-    schedules: allSchedules,
-    createSchedule,
-    addSection,
-    removeSection,
-  } = useSchedules();
-  const schedules = allSchedules.filter((s) => isCurrentTerm(s.term));
+  const { createSchedule, addSection, removeSection } = useSchedules();
+  const { current, target, setTarget } = useTargetSchedule();
   const { toast } = useToast();
   const router = useRouter();
-  const [pending, setPending] = useState<{
-    id: string;
-    name: string;
-    conflicts: string[];
-  } | null>(null);
 
-  const addTo = async (id: string, name: string) => {
-    await addSection(id, section);
+  const added = !!target?.sections.some((x) => x.section_id === section.section_id);
+  const conflicts = target && !added ? conflictsIn(section, target) : [];
+  const blocked = conflicts.length > 0;
+  const label = added
+    ? `In ${target!.name}. Click to remove`
+    : blocked
+      ? `Conflicts with ${conflicts.join(", ")} in ${target!.name}`
+      : `Add to ${target ? target.name : "a new schedule"}`;
+
+  const addTo = async (s: { id: string; name: string }) => {
+    await addSection(s.id, section);
     toast({
-      title: `Added to ${name}`,
+      title: `Added to ${s.name}`,
       description: `${section.course_code} - #${section.section_id}`,
       action: (
         <div className="flex gap-2">
           <ToastAction
             altText="Undo add"
             onClick={() => {
-              removeSection(id, section.section_id);
-              toast({ title: `Removed from ${name}` });
+              removeSection(s.id, section.section_id);
+              toast({ title: `Removed from ${s.name}` });
             }}
           >
             Undo
           </ToastAction>
-          <ToastAction
-            altText="Go to calendar"
-            onClick={() => router.push("/calendar")}
-          >
+          <ToastAction altText="Go to calendar" onClick={() => router.push("/calendar")}>
             Go to
           </ToastAction>
         </div>
@@ -86,129 +107,43 @@ export default function AddToSchedule({
     });
   };
 
-  // Add, but warn first (dialog) if the course overlaps existing courses/time blocks.
-  const attemptAdd = (s: ScheduleRow) => {
-    const conflicts = conflictsIn(section, s);
-    if (conflicts.length) setPending({ id: s.id, name: s.name, conflicts });
-    else addTo(s.id, s.name);
+  const onClick = async () => {
+    if (added && target) {
+      removeSection(target.id, section.section_id);
+      toast({ title: `Removed from ${target.name}` });
+      return;
+    }
+    if (blocked && target) {
+      toast({
+        variant: "destructive",
+        title: `Conflicts with ${conflicts.join(", ")}`,
+        description: `Pick a different section or another schedule than ${target.name}.`,
+      });
+      return;
+    }
+    if (target) return addTo(target);
+    const created = await createSchedule(`Schedule ${current.length + 1}`);
+    if (!created) return;
+    setTarget(created.id);
+    addTo(created);
   };
-
-  const removeFrom = (s: ScheduleRow) => {
-    removeSection(s.id, section.section_id);
-    toast({ title: `Removed from ${s.name}` });
-  };
-
-  const createAndAdd = async () => {
-    const created = await createSchedule(`Schedule ${schedules.length + 1}`);
-    if (created) addTo(created.id, created.name); // new schedule is empty - no conflicts
-  };
-
-  const triggerClass = cn(
-    "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-texas/40 align-middle text-texas transition-colors hover:bg-texas hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-texas/40",
-    className,
-  );
-
-  const trigger =
-    schedules.length <= 1 ? (
-      <button
-        type="button"
-        title="Add to schedule"
-        aria-label="Add to schedule"
-        onClick={() => {
-          const s = schedules[0];
-          if (!s) return createAndAdd();
-          if (s.sections.some((x) => x.section_id === section.section_id)) {
-            toast({ title: `Already in ${s.name}` });
-            return;
-          }
-          attemptAdd(s);
-        }}
-        className={triggerClass}
-      >
-        <Plus className="h-3 w-3" />
-      </button>
-    ) : (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            title="Add to schedule"
-            aria-label="Add to schedule"
-            className={triggerClass}
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-72">
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            Add to schedule
-          </DropdownMenuLabel>
-          {schedules.map((s) => {
-            const has = s.sections.some(
-              (x) => x.section_id === section.section_id,
-            );
-            const conflicts = conflictsIn(section, s);
-            return (
-              <DropdownMenuItem
-                key={s.id}
-                onClick={() => (has ? removeFrom(s) : attemptAdd(s))}
-                className="group gap-2"
-              >
-                {has ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 shrink-0 group-hover:hidden" />
-                    <X className="hidden h-3.5 w-3.5 shrink-0 text-destructive group-hover:block" />
-                  </>
-                ) : (
-                  <Check className="h-3.5 w-3.5 shrink-0 opacity-0" />
-                )}
-                <span className="truncate">{s.name}</span>
-                {conflicts.length > 0 && (
-                  <TriangleAlert
-                    className="ml-auto h-3.5 w-3.5 shrink-0 text-amber-500"
-                    aria-label={`Overlaps ${conflicts.join(", ")}`}
-                  />
-                )}
-              </DropdownMenuItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={createAndAdd} className="gap-2">
-            <Plus className="h-3.5 w-3.5 shrink-0" />
-            New Schedule
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
 
   return (
-    <>
-      {trigger}
-      <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Schedule conflict</DialogTitle>
-            <DialogDescription>
-              {section.course_code} overlaps {pending?.conflicts.join(", ")} in{" "}
-              {pending?.name}. Add it anyway?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setPending(null)}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-texas text-white hover:bg-texas/90"
-              onClick={() => {
-                if (pending) addTo(pending.id, pending.name);
-                setPending(null);
-              }}
-            >
-              Add anyway
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-disabled={blocked || undefined}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border align-middle transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-texas/40",
+        added && "border-texas bg-texas text-white hover:bg-texas/80",
+        blocked && "cursor-not-allowed border-muted-foreground/30 text-muted-foreground/40",
+        !added && !blocked && "border-texas/40 text-texas hover:bg-texas hover:text-white",
+        className,
+      )}
+    >
+      {added ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+    </button>
   );
 }
